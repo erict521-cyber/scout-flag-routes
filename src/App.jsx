@@ -54,7 +54,7 @@ export default function App() {
 
     const text = await file.text()
     const result = parseTroopWebHostCsv(text)
-    const parsedStops = result.stops
+    const parsedStops = dedupeStops(result.stops)
 
     if (parsedStops.length === 0) {
       alert(
@@ -80,6 +80,17 @@ export default function App() {
 
     event.target.value = ''
   }
+
+function dedupeStops(stopList) {
+  const seen = new Set()
+
+  return stopList.filter((stop) => {
+    const key = getStopDedupeKey(stop)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
   function mergeStops(currentStops, newStops) {
   const existingKeys = new Set(currentStops.map(getStopDedupeKey))
