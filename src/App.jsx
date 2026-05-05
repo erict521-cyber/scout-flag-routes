@@ -23,6 +23,7 @@ const ROUTE_OPTIONS_DEFAULT = {
   minStopsPerRoute: 5,
   maxStopsPerRoute: 25,
 }
+import RouteMap from './components/RouteMap.jsx'
 
 const EMPTY_FORM = {
   customerName: '',
@@ -387,6 +388,14 @@ function normalizeText(value) {
           </div>
         </section>
       )}
+
+<section className="panel">
+  <div className="panel-heading">
+    <MapPinned />
+    <h2>Route Map</h2>
+  </div>
+  <RouteMap routes={routes} />
+</section>
 
       <section className="driver-view">
         <div>
