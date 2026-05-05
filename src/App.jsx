@@ -1,5 +1,15 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Flag, MapPinned, Route, Upload, Users } from 'lucide-react'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Flag,
+  MapPinned,
+  Plus,
+  Route,
+  Trash2,
+  Upload,
+  Users,
+} from 'lucide-react'
 import { parseTroopWebHostCsv } from './services/troopWebHostCsv.js'
 import { buildBalancedRoutes } from './services/routingService.js'
 import { getDashboardStats } from './services/dashboardService.js'
@@ -13,21 +23,29 @@ const ROUTE_OPTIONS_DEFAULT = {
   maxStopsPerRoute: 25,
 }
 
+const EMPTY_FORM = {
+  customerName: '',
+  address: '',
+  instructions: '',
+  email: '',
+  phone: '',
+}
+
 export default function App() {
   const [workspaceStatus, setWorkspaceStatus] = useState('Demo workspace only — Google Sheets phase is parked.')
   const [stops, setStops] = useState(sampleStops)
   const [routeOptions, setRouteOptions] = useState(ROUTE_OPTIONS_DEFAULT)
   const [selectedRouteId, setSelectedRouteId] = useState('route-1')
+  const [appendMode, setAppendMode] = useState(false)
+  const [editingStopId, setEditingStopId] = useState(null)
+  const [form, setForm] = useState(EMPTY_FORM)
 
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
   const dashboard = useMemo(() => getDashboardStats(routes), [routes])
   const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0]
 
   function updateRouteOption(field, value) {
-    setRouteOptions((current) => ({
-      ...current,
-      [field]: Number(value),
-    }))
+    setRouteOptions((current) => ({ ...current, [field]: Number(value) }))
   }
 
   async function handleCsvUpload(event) {
@@ -36,29 +54,92 @@ export default function App() {
 
     const text = await file.text()
     const result = parseTroopWebHostCsv(text)
-const parsedStops = result.stops
+    const parsedStops = result.stops
 
-if (parsedStops.length === 0) {
-  alert(
-    `No usable rows found.\n\nTotal rows: ${result.summary.totalRows}\nSkipped rows: ${result.summary.skippedRows}`,
-  )
-  return
-}
+    if (parsedStops.length === 0) {
+      alert(
+        `No usable rows found.\n\nTotal rows: ${result.summary.totalRows}\nSkipped rows: ${result.summary.skippedRows}`,
+      )
+      return
+    }
 
-setStops(parsedStops)
-setSelectedRouteId('route-1')
+    setStops((current) => (appendMode ? mergeStops(current, parsedStops) : parsedStops))
+    setSelectedRouteId('route-1')
 
-const skippedMessage =
-  result.summary.skippedRows > 0
-    ? `\n\nSkipped rows: ${result.summary.skippedRows}\n${result.summary.skipped
-        .slice(0, 5)
-        .map((row) => `Row ${row.rowNumber}: ${row.reason}`)
-        .join('\n')}`
-    : ''
+    const skippedMessage =
+      result.summary.skippedRows > 0
+        ? `\n\nSkipped rows: ${result.summary.skippedRows}\n${result.summary.skipped
+            .slice(0, 5)
+            .map((row) => `Row ${row.rowNumber}: ${row.reason}`)
+            .join('\n')}`
+        : ''
 
-alert(
-  `CSV import complete.\n\nImported rows: ${result.summary.importedRows}\nTotal rows: ${result.summary.totalRows}${skippedMessage}`,
-)
+    alert(
+      `CSV import complete.\n\nMode: ${appendMode ? 'Append' : 'Replace'}\nImported rows: ${result.summary.importedRows}\nTotal rows: ${result.summary.totalRows}${skippedMessage}`,
+    )
+
+    event.target.value = ''
+  }
+
+  function mergeStops(currentStops, newStops) {
+    const existingIds = new Set(currentStops.map((stop) => String(stop.id)))
+    const uniqueNewStops = newStops.filter((stop) => !existingIds.has(String(stop.id)))
+    return [...currentStops, ...uniqueNewStops]
+  }
+
+  function startAddStop() {
+    setEditingStopId('new')
+    setForm(EMPTY_FORM)
+  }
+
+  function startEditStop(stop) {
+    setEditingStopId(stop.id)
+    setForm({
+      customerName: stop.customerName || '',
+      address: stop.address || '',
+      instructions: stop.instructions || '',
+      email: stop.email || '',
+      phone: stop.phone || '',
+    })
+  }
+
+  function cancelEdit() {
+    setEditingStopId(null)
+    setForm(EMPTY_FORM)
+  }
+
+  function saveStop() {
+    if (!form.customerName.trim() || !form.address.trim()) {
+      alert('Customer name and address are required.')
+      return
+    }
+
+    if (editingStopId === 'new') {
+      const newStop = {
+        id: `manual-${Date.now()}`,
+        ...form,
+        lat: null,
+        lng: null,
+        posted: false,
+        pickedUp: false,
+        postedAt: '',
+        pickedUpAt: '',
+        comment: '',
+      }
+
+      setStops((current) => [...current, newStop])
+    } else {
+      setStops((current) =>
+        current.map((stop) => (stop.id === editingStopId ? { ...stop, ...form } : stop)),
+      )
+    }
+
+    cancelEdit()
+  }
+
+  function deleteStop(stopId) {
+    if (!confirm('Delete this customer/stop?')) return
+    setStops((current) => current.filter((stop) => stop.id !== stopId))
   }
 
   function toggleStopStatus(stopId, field) {
@@ -91,7 +172,7 @@ alert(
           <h1>Troop-owned flag route operations</h1>
           <p className="hero-copy">
             Import TroopWebHost orders, rebalance volunteer routes, and track morning posting and
-            evening pickup without hosting troop customer data in a central database.
+            evening pickup.
           </p>
         </div>
         <div className="hero-card">
@@ -104,8 +185,7 @@ alert(
       <section className="notice">
         <AlertTriangle size={20} />
         <div>
-          <strong>Safety guidance:</strong> Drivers should use a navigator/passenger to operate the
-          app. The driver should not interact with the app while driving.
+          <strong>Safety guidance:</strong> Drivers should use a navigator/passenger to operate the app.
         </div>
       </section>
 
@@ -114,16 +194,20 @@ alert(
           <p>{workspaceStatus}</p>
           <button
             className="secondary"
-            onClick={() =>
-              setWorkspaceStatus('Future phase: connect or create troop-owned Google Sheet.')
-            }
+            onClick={() => setWorkspaceStatus('Future phase: connect or create troop-owned Google Sheet.')}
           >
             Placeholder: Connect/Create Sheet
           </button>
         </Panel>
 
         <Panel icon={<Upload />} title="Import TroopWebHost CSV">
-          <p>CSV upload is the only planned ingestion path for this app.</p>
+          <p>Use replace for a new clean import, or append to add another file to existing stops.</p>
+
+          <label className="checkbox-row">
+            <input type="checkbox" checked={appendMode} onChange={(event) => setAppendMode(event.target.checked)} />
+            Append file instead of replacing current stops
+          </label>
+
           <label className="file-button">
             Upload CSV
             <input type="file" accept=".csv,text/csv" onChange={handleCsvUpload} />
@@ -142,38 +226,18 @@ alert(
       <section className="grid two">
         <Panel icon={<Users />} title="Route Planning Controls">
           <div className="form-grid">
-            <NumberField
-              label="Available drivers/routes"
-              value={routeOptions.availableDrivers}
-              min="1"
-              onChange={(value) => updateRouteOption('availableDrivers', value)}
-            />
-            <NumberField
-              label="Max routes"
-              value={routeOptions.maxRoutes}
-              min="1"
-              onChange={(value) => updateRouteOption('maxRoutes', value)}
-            />
-            <NumberField
-              label="Min stops per route"
-              value={routeOptions.minStopsPerRoute}
-              min="1"
-              onChange={(value) => updateRouteOption('minStopsPerRoute', value)}
-            />
-            <NumberField
-              label="Max stops per route"
-              value={routeOptions.maxStopsPerRoute}
-              min="1"
-              onChange={(value) => updateRouteOption('maxStopsPerRoute', value)}
-            />
+            <NumberField label="Available drivers/routes" value={routeOptions.availableDrivers} min="1" onChange={(value) => updateRouteOption('availableDrivers', value)} />
+            <NumberField label="Max routes" value={routeOptions.maxRoutes} min="1" onChange={(value) => updateRouteOption('maxRoutes', value)} />
+            <NumberField label="Min stops per route" value={routeOptions.minStopsPerRoute} min="1" onChange={(value) => updateRouteOption('minStopsPerRoute', value)} />
+            <NumberField label="Max stops per route" value={routeOptions.maxStopsPerRoute} min="1" onChange={(value) => updateRouteOption('maxStopsPerRoute', value)} />
           </div>
-          <p className="small">
-            Current routing uses a simple geographic sort + balancing placeholder. Replace this with
-            stronger clustering after the Google Sheets phase is stable.
-          </p>
         </Panel>
 
         <Panel icon={<Route />} title="Coordinator Dashboard">
+          <button onClick={startAddStop}>
+            <Plus size={16} /> Add customer
+          </button>
+
           <div className="route-list">
             {routes.map((route) => (
               <button
@@ -190,13 +254,33 @@ alert(
         </Panel>
       </section>
 
+      {editingStopId && (
+        <section className="panel editor-panel">
+          <h2>{editingStopId === 'new' ? 'Add Customer' : 'Edit Customer'}</h2>
+
+          <div className="form-grid">
+            <TextField label="Customer name" value={form.customerName} onChange={(value) => setForm({ ...form, customerName: value })} />
+            <TextField label="Address" value={form.address} onChange={(value) => setForm({ ...form, address: value })} />
+            <TextField label="Email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
+            <TextField label="Phone" value={form.phone} onChange={(value) => setForm({ ...form, phone: value })} />
+          </div>
+
+          <label className="full-field">
+            <span>Special instructions</span>
+            <textarea value={form.instructions} onChange={(event) => setForm({ ...form, instructions: event.target.value })} />
+          </label>
+
+          <div className="actions">
+            <button onClick={saveStop}>Save</button>
+            <button className="secondary" onClick={cancelEdit}>Cancel</button>
+          </div>
+        </section>
+      )}
+
       <section className="driver-view">
         <div>
           <p className="eyebrow">Driver / Navigator View</p>
           <h2>{selectedRoute?.name || 'No route selected'}</h2>
-          <p className="small">
-            Future phase: driver enters driver/navigator name. If already assigned, show warning.
-          </p>
         </div>
 
         <div className="stop-list">
@@ -206,19 +290,19 @@ alert(
                 <strong>{stop.customerName}</strong>
                 <p>{stop.address}</p>
                 {stop.instructions && <p className="small">Instructions: {stop.instructions}</p>}
+                {stop.email && <p className="small">Email: {stop.email}</p>}
+                {stop.phone && <p className="small">Phone: {stop.phone}</p>}
               </div>
 
               <div className="actions">
-                <button
-                  className={stop.posted ? 'success' : 'secondary'}
-                  onClick={() => toggleStopStatus(stop.id, 'posted')}
-                >
+                <button className="secondary" onClick={() => startEditStop(stop)}>Edit</button>
+                <button className="danger" onClick={() => deleteStop(stop.id)}>
+                  <Trash2 size={16} /> Delete
+                </button>
+                <button className={stop.posted ? 'success' : 'secondary'} onClick={() => toggleStopStatus(stop.id, 'posted')}>
                   {stop.posted ? 'Posted ✓' : 'Mark posted'}
                 </button>
-                <button
-                  className={stop.pickedUp ? 'success' : 'secondary'}
-                  onClick={() => toggleStopStatus(stop.id, 'pickedUp')}
-                >
+                <button className={stop.pickedUp ? 'success' : 'secondary'} onClick={() => toggleStopStatus(stop.id, 'pickedUp')}>
                   {stop.pickedUp ? 'Picked up ✓' : 'Mark pickup'}
                 </button>
               </div>
@@ -267,6 +351,15 @@ function NumberField({ label, value, onChange, min }) {
   )
 }
 
+function TextField({ label, value, onChange }) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  )
+}
+
 function IssueLog({ routes }) {
   const issues = routes.flatMap((route) =>
     route.stops
@@ -278,9 +371,7 @@ function IssueLog({ routes }) {
       })),
   )
 
-  if (issues.length === 0) {
-    return <p className="small">No issues or comments yet.</p>
-  }
+  if (issues.length === 0) return <p className="small">No issues or comments yet.</p>
 
   return (
     <div className="issue-log">
