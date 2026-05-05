@@ -9,13 +9,14 @@ import {
   Trash2,
   Upload,
   Users,
+Navigation,
 } from 'lucide-react'
 import { parseTroopWebHostCsv } from './services/troopWebHostCsv.js'
 import { buildBalancedRoutes } from './services/routingService.js'
 import { getDashboardStats } from './services/dashboardService.js'
 import { sampleStops } from './services/sampleData.js'
 import './styles.css'
-
+import { geocodeAddress, wait } from './services/geocodingService.js'
 const ROUTE_OPTIONS_DEFAULT = {
   availableDrivers: 4,
   maxRoutes: 6,
@@ -42,6 +43,8 @@ export default function App() {
   const [appendMode, setAppendMode] = useState(false)
   const [editingStopId, setEditingStopId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
+const [isGeocoding, setIsGeocoding] = useState(false)
+const [geocodeProgress, setGeocodeProgress] = useState('')
 
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
   const dashboard = useMemo(() => getDashboardStats(routes), [routes])
@@ -53,6 +56,66 @@ useEffect(() => {
   function updateRouteOption(field, value) {
     setRouteOptions((current) => ({ ...current, [field]: Number(value) }))
   }
+
+async function geocodeMissingAddresses() {
+  const missingGeo = stops.filter((stop) => !Number.isFinite(stop.lat) || !Number.isFinite(stop.lng))
+
+  if (missingGeo.length === 0) {
+    alert('All stops already have coordinates.')
+    return
+  }
+
+  if (!confirm(`Geocode ${missingGeo.length} missing addresses? This will run slowly to respect free API limits.`)) {
+    return
+  }
+
+  setIsGeocoding(true)
+
+  let updatedStops = [...stops]
+  let successCount = 0
+  let failedCount = 0
+
+  for (let i = 0; i < missingGeo.length; i += 1) {
+    const stop = missingGeo[i]
+    setGeocodeProgress(`Geocoding ${i + 1} of ${missingGeo.length}: ${stop.customerName}`)
+
+    try {
+      const result = await geocodeAddress(stop.address)
+
+      if (result) {
+        updatedStops = updatedStops.map((currentStop) =>
+          currentStop.id === stop.id
+            ? {
+                ...currentStop,
+                lat: result.lat,
+                lng: result.lng,
+                geocodeDisplayName: result.displayName,
+                geocodeProvider: result.provider,
+                geocodedAt: new Date().toISOString(),
+              }
+            : currentStop,
+        )
+        successCount += 1
+      } else {
+        failedCount += 1
+      }
+    } catch (error) {
+      console.error(error)
+      failedCount += 1
+    }
+
+    setStops(updatedStops)
+
+    if (i < missingGeo.length - 1) {
+      await wait(1100)
+    }
+  }
+
+  setIsGeocoding(false)
+  setGeocodeProgress('')
+
+  alert(`Geocoding complete.\n\nSuccess: ${successCount}\nFailed: ${failedCount}`)
+}
 
   async function handleCsvUpload(event) {
     const file = event.target.files?.[0]
@@ -276,6 +339,16 @@ function normalizeText(value) {
 >
   Clear local data
 </button>
+
+<button className="secondary" onClick={geocodeMissingAddresses} disabled={isGeocoding}>
+  <Navigation size={16} />
+  {isGeocoding ? 'Geocoding...' : 'Geocode missing'}
+</button>
+
+{geocodeProgress && <p className="small">{geocodeProgress}</p>}
+
+<p className="small">Geocoding © OpenStreetMap contributors</p>
+
           <div className="route-list">
             {routes.map((route) => (
               <button
@@ -327,6 +400,12 @@ function normalizeText(value) {
               <div>
                 <strong>{stop.customerName}</strong>
                 <p>{stop.address}</p>
+
+{Number.isFinite(stop.lat) && Number.isFinite(stop.lng) && (
+  <p className="small">
+    Coordinates: {stop.lat.toFixed(5)}, {stop.lng.toFixed(5)}
+  </p>
+)}
                 {stop.instructions && <p className="small">Instructions: {stop.instructions}</p>}
                 {stop.email && <p className="small">Email: {stop.email}</p>}
                 {stop.phone && <p className="small">Phone: {stop.phone}</p>}
