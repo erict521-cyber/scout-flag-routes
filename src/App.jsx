@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -33,7 +33,10 @@ const EMPTY_FORM = {
 
 export default function App() {
   const [workspaceStatus, setWorkspaceStatus] = useState('Demo workspace only — Google Sheets phase is parked.')
-  const [stops, setStops] = useState(sampleStops)
+  const [stops, setStops] = useState(() => {
+  const saved = localStorage.getItem('scoutFlagRoutes.stops')
+  return saved ? JSON.parse(saved) : sampleStops
+})
   const [routeOptions, setRouteOptions] = useState(ROUTE_OPTIONS_DEFAULT)
   const [selectedRouteId, setSelectedRouteId] = useState('route-1')
   const [appendMode, setAppendMode] = useState(false)
@@ -43,6 +46,9 @@ export default function App() {
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
   const dashboard = useMemo(() => getDashboardStats(routes), [routes])
   const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0]
+useEffect(() => {
+  localStorage.setItem('scoutFlagRoutes.stops', JSON.stringify(stops))
+}, [stops])
 
   function updateRouteOption(field, value) {
     setRouteOptions((current) => ({ ...current, [field]: Number(value) }))
@@ -259,7 +265,17 @@ function normalizeText(value) {
           <button onClick={startAddStop}>
             <Plus size={16} /> Add customer
           </button>
-
+<button
+  className="danger"
+  onClick={() => {
+    if (!confirm('Clear all saved local data and reload sample stops?')) return
+    localStorage.removeItem('scoutFlagRoutes.stops')
+    setStops(sampleStops)
+    setSelectedRouteId('route-1')
+  }}
+>
+  Clear local data
+</button>
           <div className="route-list">
             {routes.map((route) => (
               <button
