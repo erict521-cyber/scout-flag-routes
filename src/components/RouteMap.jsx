@@ -10,20 +10,22 @@ export default function RouteMap({ routes }) {
   const layerRef = useRef(null)
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return
+  if (!mapRef.current || mapInstanceRef.current) return
 
-    mapInstanceRef.current = L.map(mapRef.current).setView([29.7604, -95.3698], 11)
+  const map = L.map(mapRef.current).setView([29.7604, -95.3698], 11)
 
-setTimeout(() => {
-  mapInstanceRef.current.invalidateSize()
-}, 100)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(mapInstanceRef.current)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(map)
 
-    layerRef.current = L.layerGroup().addTo(mapInstanceRef.current)
-  }, [])
+  mapInstanceRef.current = map
+  layerRef.current = L.layerGroup().addTo(map)
+
+  requestAnimationFrame(() => {
+    map.invalidateSize()
+  })
+}, [])
 
   useEffect(() => {
     const map = mapInstanceRef.current
