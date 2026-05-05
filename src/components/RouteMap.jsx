@@ -14,6 +14,9 @@ export default function RouteMap({ routes }) {
 
     mapInstanceRef.current = L.map(mapRef.current).setView([29.7604, -95.3698], 11)
 
+setTimeout(() => {
+  mapInstanceRef.current.invalidateSize()
+}, 100)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
       maxZoom: 19,
