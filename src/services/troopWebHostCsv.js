@@ -68,7 +68,8 @@ function rowToStop(headers, row, index) {
   return {
     valid: true,
     stop: {
-      id: get('Order ID', 'Internet Order', 'Reference Key') || `csv-${index + 1}`,
+      id: `csv-${index + 1}-${Date.now()}`,
+sourceOrderId: get('Order ID', 'Internet Order', 'Reference Key'),
       customerName,
       address,
       email: get('E-Mail', 'Email'),
