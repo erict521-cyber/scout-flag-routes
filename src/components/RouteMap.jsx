@@ -22,9 +22,7 @@ export default function RouteMap({ routes }) {
     mapInstanceRef.current = map
     layerRef.current = L.layerGroup().addTo(map)
 
-    setTimeout(() => {
-      map.invalidateSize()
-    }, 500)
+    setTimeout(() => map.invalidateSize(), 500)
   }, [])
 
   useEffect(() => {
@@ -40,16 +38,30 @@ export default function RouteMap({ routes }) {
     routes.forEach((route, routeIndex) => {
       const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length]
 
-      route.stops.forEach((stop, stopIndex) => {
-        const lat = Number(stop.lat)
-        const lng = Number(stop.lng)
+      const routePoints = route.stops
+        .map((stop) => ({
+          stop,
+          lat: Number(stop.lat),
+          lng: Number(stop.lng),
+        }))
+        .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
 
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+      if (routePoints.length > 1) {
+        L.polyline(
+          routePoints.map((point) => [point.lat, point.lng]),
+          {
+            color,
+            weight: 4,
+            opacity: 0.65,
+          },
+        ).addTo(layer)
+      }
 
-        const point = [lat, lng]
-        bounds.push(point)
+      routePoints.forEach((point, stopIndex) => {
+        const latLng = [point.lat, point.lng]
+        bounds.push(latLng)
 
-        L.circleMarker(point, {
+        L.circleMarker(latLng, {
           radius: 8,
           color,
           fillColor: color,
@@ -59,8 +71,8 @@ export default function RouteMap({ routes }) {
           .bindPopup(`
             <strong>${route.name}</strong><br/>
             Stop ${stopIndex + 1}<br/>
-            ${escapeHtml(stop.customerName)}<br/>
-            ${escapeHtml(stop.address)}
+            ${escapeHtml(point.stop.customerName)}<br/>
+            ${escapeHtml(point.stop.address)}
           `)
           .addTo(layer)
       })
@@ -70,9 +82,7 @@ export default function RouteMap({ routes }) {
       map.fitBounds(bounds, { padding: [30, 30] })
     }
 
-    setTimeout(() => {
-      map.invalidateSize()
-    }, 500)
+    setTimeout(() => map.invalidateSize(), 500)
   }, [routes])
 
   return (
