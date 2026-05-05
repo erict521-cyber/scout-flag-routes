@@ -1,0 +1,18 @@
+{
+  "name": "Scout Flag Routes",
+  "short_name": "Flag Routes",
+  "description": "Troop-owned flag service routing and operations app.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
