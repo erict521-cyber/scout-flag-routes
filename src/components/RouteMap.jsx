@@ -10,22 +10,22 @@ export default function RouteMap({ routes }) {
   const layerRef = useRef(null)
 
   useEffect(() => {
-  if (!mapRef.current || mapInstanceRef.current) return
+    if (!mapRef.current || mapInstanceRef.current) return
 
-  const map = L.map(mapRef.current).setView([29.7604, -95.3698], 11)
+    const map = L.map(mapRef.current).setView([29.5, -95.1], 11)
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 19,
-  }).addTo(map)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map)
 
-  mapInstanceRef.current = map
-  layerRef.current = L.layerGroup().addTo(map)
+    mapInstanceRef.current = map
+    layerRef.current = L.layerGroup().addTo(map)
 
-  requestAnimationFrame(() => {
-    map.invalidateSize()
-  })
-}, [])
+    setTimeout(() => {
+      map.invalidateSize()
+    }, 500)
+  }, [])
 
   useEffect(() => {
     const map = mapInstanceRef.current
@@ -40,41 +40,58 @@ export default function RouteMap({ routes }) {
     routes.forEach((route, routeIndex) => {
       const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length]
 
-      route.stops
-        .filter((stop) => Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)))
-        .forEach((stop, stopIndex) => {
-          const latLng = [Number(stop.lat), Number(stop.lng)]
-          bounds.push(latLng)
+      route.stops.forEach((stop, stopIndex) => {
+        const lat = Number(stop.lat)
+        const lng = Number(stop.lng)
 
-          const marker = L.circleMarker(latLng, {
-            radius: 8,
-            color,
-            fillColor: color,
-            fillOpacity: 0.8,
-            weight: 2,
-          })
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
 
-          marker.bindPopup(`
+        const point = [lat, lng]
+        bounds.push(point)
+
+        L.circleMarker(point, {
+          radius: 8,
+          color,
+          fillColor: color,
+          fillOpacity: 0.85,
+          weight: 2,
+        })
+          .bindPopup(`
             <strong>${route.name}</strong><br/>
             Stop ${stopIndex + 1}<br/>
-            ${escapeHtml(stop.customerName || '')}<br/>
-            ${escapeHtml(stop.address || '')}
+            ${escapeHtml(stop.customerName)}<br/>
+            ${escapeHtml(stop.address)}
           `)
-
-          marker.addTo(layer)
-        })
+          .addTo(layer)
+      })
     })
 
     if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [30, 30] })
     }
+
+    setTimeout(() => {
+      map.invalidateSize()
+    }, 500)
   }, [routes])
 
-  return <div className="route-map" ref={mapRef} />
+  return (
+    <div
+      ref={mapRef}
+      style={{
+        width: '100%',
+        height: '420px',
+        borderRadius: '1rem',
+        overflow: 'hidden',
+        border: '1px solid #e2e8f0',
+        marginTop: '1rem',
+      }}
+    />
+  )
 }
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value || '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
