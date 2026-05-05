@@ -35,15 +35,30 @@ export default function App() {
     if (!file) return
 
     const text = await file.text()
-    const parsedStops = parseTroopWebHostCsv(text)
+    const result = parseTroopWebHostCsv(text)
+const parsedStops = result.stops
 
-    if (parsedStops.length === 0) {
-      alert('No usable rows found. Check the CSV headers and try again.')
-      return
-    }
+if (parsedStops.length === 0) {
+  alert(
+    `No usable rows found.\n\nTotal rows: ${result.summary.totalRows}\nSkipped rows: ${result.summary.skippedRows}`,
+  )
+  return
+}
 
-    setStops(parsedStops)
-    setSelectedRouteId('route-1')
+setStops(parsedStops)
+setSelectedRouteId('route-1')
+
+const skippedMessage =
+  result.summary.skippedRows > 0
+    ? `\n\nSkipped rows: ${result.summary.skippedRows}\n${result.summary.skipped
+        .slice(0, 5)
+        .map((row) => `Row ${row.rowNumber}: ${row.reason}`)
+        .join('\n')}`
+    : ''
+
+alert(
+  `CSV import complete.\n\nImported rows: ${result.summary.importedRows}\nTotal rows: ${result.summary.totalRows}${skippedMessage}`,
+)
   }
 
   function toggleStopStatus(stopId, field) {
