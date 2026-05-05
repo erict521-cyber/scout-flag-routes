@@ -82,10 +82,21 @@ export default function App() {
   }
 
   function mergeStops(currentStops, newStops) {
-    const existingIds = new Set(currentStops.map((stop) => String(stop.id)))
-    const uniqueNewStops = newStops.filter((stop) => !existingIds.has(String(stop.id)))
-    return [...currentStops, ...uniqueNewStops]
-  }
+  const existingKeys = new Set(currentStops.map(getStopDedupeKey))
+  const uniqueNewStops = newStops.filter((stop) => !existingKeys.has(getStopDedupeKey(stop)))
+  return [...currentStops, ...uniqueNewStops]
+}
+
+function getStopDedupeKey(stop) {
+  return `${normalizeText(stop.customerName)}|${normalizeText(stop.address)}`
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
 
   function startAddStop() {
     setEditingStopId('new')
