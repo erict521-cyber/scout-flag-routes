@@ -11,6 +11,7 @@
     "react": "latest",
     "react-dom": "latest",
     "lucide-react": "latest"
+"leaflet": "latest"
   },
   "devDependencies": {
     "eslint": "latest",
