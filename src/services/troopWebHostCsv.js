@@ -19,25 +19,19 @@ function rowToStop(headers, row, index) {
     return headerIndex >= 0 ? String(row[headerIndex] || '').trim() : ''
   }
 
-  const customerName =
-    get('Customer Name', 'Name', 'Purchaser Name', 'First Name') ||
-    [get('First Name'), get('Last Name')].filter(Boolean).join(' ')
+  const customerName = get('Customer', 'Customer Name', 'Name')
 
-  const addressParts = [
-    get('Address', 'Street Address', 'Address 1'),
-    get('Address 2'),
-    get('City'),
-    get('State'),
-    get('Zip', 'Zip Code', 'Postal Code'),
-  ].filter(Boolean)
+  const address = get('Address', 'Street Address', 'Address 1')
 
   return {
-    id: get('Order ID', 'Invoice', 'Customer ID') || `csv-${index + 1}`,
+    id: get('Order ID', 'Internet Order', 'Reference Key') || `csv-${index + 1}`,
     customerName,
-    address: addressParts.join(', '),
+    address,
+    email: get('E-Mail', 'Email'),
+    phone: get('Phone'),
+    instructions: get('Special Instructions', 'Instructions', 'Notes'),
     lat: Number(get('Latitude', 'Lat')) || null,
     lng: Number(get('Longitude', 'Lng', 'Long')) || null,
-    instructions: get('Instructions', 'Notes', 'Special Instructions'),
     posted: false,
     pickedUp: false,
     postedAt: '',
@@ -46,17 +40,17 @@ function rowToStop(headers, row, index) {
   }
 }
 
-// Lightweight CSV parser that handles quoted commas and escaped quotes.
-// Good enough for MVP imports. Replace with PapaParse if CSV complexity grows.
 function parseCsv(text) {
   const rows = []
   let row = []
   let value = ''
   let inQuotes = false
 
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i]
-    const next = text[i + 1]
+  const cleanText = text.replace(/^\uFEFF/, '')
+
+  for (let i = 0; i < cleanText.length; i += 1) {
+    const char = cleanText[i]
+    const next = cleanText[i + 1]
 
     if (char === '"' && inQuotes && next === '"') {
       value += '"'
