@@ -515,82 +515,113 @@ export default function App() {
 
         <div className="stop-list">
           {selectedRoute?.stops.map((stop) => (
-            <article
-              className="stop-card"
-              key={stop.id}
-              style={{ borderLeft: `6px solid ${selectedRouteColor}` }}
-            >
-              <div>
-                <div
-                  style={{
-                    background: selectedRouteColor,
-                    color: 'white',
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    borderRadius: '999px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    marginBottom: '6px',
-                  }}
-                >
-                  {selectedRoute?.name}
-                </div>
+           <article
+  className="stop-card"
+  key={stop.id}
+  style={{ borderLeft: `6px solid ${selectedRouteColor}` }}
+>
+  <div>
+    <div
+      style={{
+        background: selectedRouteColor,
+        color: 'white',
+        display: 'inline-block',
+        padding: '2px 8px',
+        borderRadius: '999px',
+        fontSize: '12px',
+        fontWeight: 700,
+        marginBottom: '8px',
+      }}
+    >
+      {selectedRoute?.name}
+    </div>
 
-                <strong>{stop.customerName}</strong>
-                <p>{stop.address}</p>
+    <strong style={{ display: 'block', marginBottom: '0.5rem' }}>
+      {stop.customerName}
+    </strong>
 
-                {Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)) && (
-                  <p className="small">
-                    Coordinates: {Number(stop.lat).toFixed(5)}, {Number(stop.lng).toFixed(5)}
-                  </p>
-                )}
+    <p>
+      <strong>Address:</strong> {stop.address}
+    </p>
 
-                {stop.instructions && <p className="small">Instructions: {stop.instructions}</p>}
-                {stop.email && <p className="small">Email: {stop.email}</p>}
-                {stop.phone && <p className="small">Phone: {stop.phone}</p>}
-              </div>
+    <a
+      className="button-link secondary"
+      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        stop.address,
+      )}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ margin: '0.35rem 0 0.65rem' }}
+    >
+      Get directions
+    </a>
 
-              <div className="actions">
-                <button className="secondary" onClick={() => moveStopInSelectedRoute(stop.id, 'up')}>
-                  <ArrowUp size={16} /> Up
-                </button>
+    {Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)) && (
+      <p className="small">
+        <strong>Coordinates:</strong> {Number(stop.lat).toFixed(5)},{' '}
+        {Number(stop.lng).toFixed(5)}
+      </p>
+    )}
 
-                <button
-                  className="secondary"
-                  onClick={() => moveStopInSelectedRoute(stop.id, 'down')}
-                >
-                  <ArrowDown size={16} /> Down
-                </button>
+    {stop.instructions && (
+      <p className="small">
+        <strong>Instructions:</strong> {stop.instructions}
+      </p>
+    )}
 
-                <button className="secondary" onClick={() => startEditStop(stop)}>
-                  Edit
-                </button>
+    {stop.email && (
+      <p className="small">
+        <strong>Email:</strong> {stop.email}
+      </p>
+    )}
 
-                <button className="danger" onClick={() => deleteStop(stop.id)}>
-                  <Trash2 size={16} /> Delete
-                </button>
+    {stop.phone && (
+      <p className="small">
+        <strong>Phone:</strong> {stop.phone}
+      </p>
+    )}
+  </div>
 
-                <button
-                  className={stop.posted ? 'success' : 'secondary'}
-                  onClick={() => toggleStopStatus(stop.id, 'posted')}
-                >
-                  {stop.posted ? 'Posted ✓' : 'Mark posted'}
-                </button>
+  <div className="actions">
+    <button className="secondary" onClick={() => moveStopInSelectedRoute(stop.id, 'up')}>
+      <ArrowUp size={16} /> Up
+    </button>
 
-                <button
-                  className={stop.pickedUp ? 'success' : 'secondary'}
-                  onClick={() => toggleStopStatus(stop.id, 'pickedUp')}
-                >
-                  {stop.pickedUp ? 'Picked up ✓' : 'Mark pickup'}
-                </button>
-              </div>
+    <button className="secondary" onClick={() => moveStopInSelectedRoute(stop.id, 'down')}>
+      <ArrowDown size={16} /> Down
+    </button>
 
-              <textarea
-                placeholder="Comment or issue..."
-                value={stop.comment || ''}
-                onChange={(event) => updateStopComment(stop.id, event.target.value)}
-              />
-            </article>
+    <button className="secondary" onClick={() => startEditStop(stop)}>
+      Edit
+    </button>
+
+    <button
+      className={stop.posted ? 'success' : 'secondary'}
+      onClick={() => toggleStopStatus(stop.id, 'posted')}
+    >
+      {stop.posted ? 'Posted ✓' : 'Mark posted'}
+    </button>
+
+    <button
+      className={stop.pickedUp ? 'success' : 'secondary'}
+      onClick={() => toggleStopStatus(stop.id, 'pickedUp')}
+    >
+      {stop.pickedUp ? 'Picked up ✓' : 'Mark pickup'}
+    </button>
+  </div>
+
+  <textarea
+    placeholder="Comment or issue..."
+    value={stop.comment || ''}
+    onChange={(event) => updateStopComment(stop.id, event.target.value)}
+  />
+
+  <div className="actions">
+    <button className="danger" onClick={() => deleteStop(stop.id)}>
+      <Trash2 size={16} /> Delete
+    </button>
+  </div>
+</article>
           ))}
         </div>
       </section>
