@@ -35,6 +35,8 @@ const EMPTY_FORM = {
   phone: '',
 }
 
+const ROUTE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#0891b2']
+
 export default function App() {
   const [workspaceStatus, setWorkspaceStatus] = useState('Demo workspace only — Google Sheets phase is parked.')
   const [stops, setStops] = useState(() => {
@@ -390,15 +392,19 @@ function normalizeText(value) {
 <p className="small">Geocoding © OpenStreetMap contributors</p>
 
           <div className="route-list">
-            {routes.map((route) => (
+            {routes.map((route, index) => (
               <button
-                className={route.id === selectedRoute?.id ? 'route-pill active' : 'route-pill'}
-                key={route.id}
-                onClick={() => setSelectedRouteId(route.id)}
-              >
-                {route.name}
-                <span>{route.stops.length} stops</span>
-              </button>
+  className={route.id === selectedRoute?.id ? 'route-pill active' : 'route-pill'}
+  key={route.id}
+  onClick={() => setSelectedRouteId(route.id)}
+  style={{
+    background: ROUTE_COLORS[index % ROUTE_COLORS.length],
+    color: 'white',
+  }}
+>
+  <span className="route-color-label">{route.name}</span>
+  <span>{route.stops.length} stops</span>
+</button>
             ))}
           </div>
           <IssueLog routes={routes} />
