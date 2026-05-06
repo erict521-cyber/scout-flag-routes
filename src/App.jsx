@@ -56,10 +56,19 @@ export default function App() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [isGeocoding, setIsGeocoding] = useState(false)
   const [geocodeProgress, setGeocodeProgress] = useState('')
+const [driverMode, setDriverMode] = useState('overview')
+const [activeStopIndex, setActiveStopIndex] = useState(0)
 
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
   const dashboard = useMemo(() => getDashboardStats(routes), [routes])
   const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0]
+const activeStop = selectedRoute?.stops?.[activeStopIndex] || null
+
+const postedCountForRoute =
+  selectedRoute?.stops.filter((stop) => stop.posted).length || 0
+
+const pickedUpCountForRoute =
+  selectedRoute?.stops.filter((stop) => stop.pickedUp).length || 0
 
   const selectedRouteIndex = routes.findIndex((route) => route.id === selectedRoute?.id)
   const selectedRouteColor =
@@ -508,196 +517,192 @@ export default function App() {
       </section>
 
       <section className="driver-view">
-        <div>
-          <p className="eyebrow">Driver / Navigator View</p>
-          <h2>{selectedRoute?.name || 'No route selected'}</h2>
+  {driverMode === 'overview' ? (
+    <>
+      <div>
+        <p className="eyebrow">Driver Route Overview</p>
+        <h2>{selectedRoute?.name || 'No route selected'}</h2>
+      </div>
+
+      <div className="grid stats">
+        <Stat
+          label="Total Stops"
+          value={selectedRoute?.stops.length || 0}
+          icon={<MapPinned />}
+        />
+
+        <Stat
+          label="Posted"
+          value={postedCountForRoute}
+          icon={<CheckCircle2 />}
+        />
+
+        <Stat
+          label="Picked Up"
+          value={pickedUpCountForRoute}
+          icon={<Flag />}
+        />
+      </div>
+
+      <div style={{ marginTop: '1rem' }}>
+        <button
+          onClick={() => setDriverMode('active')}
+          style={{
+            background: selectedRouteColor,
+            color: 'white',
+          }}
+        >
+          Start / Continue Route
+        </button>
+      </div>
+
+      <div style={{ marginTop: '1.5rem' }}>
+        <RouteMap routes={routes} />
+      </div>
+    </>
+  ) : (
+    activeStop && (
+      <article
+        className="stop-card"
+        style={{ borderLeft: `6px solid ${selectedRouteColor}` }}
+      >
+        <div
+          style={{
+            background: selectedRouteColor,
+            color: 'white',
+            display: 'inline-block',
+            padding: '2px 8px',
+            borderRadius: '999px',
+            fontSize: '12px',
+            fontWeight: 700,
+            marginBottom: '10px',
+          }}
+        >
+          {selectedRoute?.name}
         </div>
 
-        <div className="stop-list">
-          {selectedRoute?.stops.map((stop) => (
-           <article
-  className="stop-card"
-  key={stop.id}
-  style={{ borderLeft: `6px solid ${selectedRouteColor}` }}
->
-  {/* Route Identity */}
-  <div
-    style={{
-      background: selectedRouteColor,
-      color: 'white',
-      display: 'inline-block',
-      padding: '2px 8px',
-      borderRadius: '999px',
-      fontSize: '12px',
-      fontWeight: 700,
-      marginBottom: '10px',
-    }}
-  >
-    {selectedRoute?.name}
-  </div>
+        <p className="small">
+          Stop {activeStopIndex + 1} of {selectedRoute?.stops.length}
+        </p>
 
-  {/* Customer */}
-  <strong
-    style={{
-      display: 'block',
-      marginBottom: '0.75rem',
-      fontSize: '1.05rem',
-    }}
-  >
-    {stop.customerName}
-  </strong>
+        <strong
+          style={{
+            display: 'block',
+            marginBottom: '0.75rem',
+            fontSize: '1.1rem',
+          }}
+        >
+          {activeStop.customerName}
+        </strong>
 
-  {/* Address */}
-  <p>
-    <strong>Address:</strong> {stop.address}
-  </p>
+        <p>
+          <strong>Address:</strong> {activeStop.address}
+        </p>
 
-  {/* Directions */}
-  <div style={{ margin: '0.75rem 0 1rem' }}>
-    <a
-      className="button-link secondary"
-      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-        stop.address,
-      )}`}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      Get directions
-    </a>
-  </div>
-
-  {/* Instructions */}
-  {stop.instructions && (
-    <p className="small">
-      <strong>Instructions:</strong> {stop.instructions}
-    </p>
-  )}
-
-  {/* Phone */}
-  {stop.phone && (
-    <p className="small">
-      <strong>Phone:</strong> {stop.phone}
-    </p>
-  )}
-
-  {/* Email */}
-  {stop.email && (
-    <p className="small">
-      <strong>Email:</strong> {stop.email}
-    </p>
-  )}
-
-  {/* Coordinator Controls */}
-  <div
-    className="actions"
-    style={{
-      marginTop: '1rem',
-      marginBottom: '1rem',
-    }}
-  >
-    <button
-      className="secondary"
-      onClick={() => moveStopInSelectedRoute(stop.id, 'up')}
-    >
-      <ArrowUp size={16} /> Up
-    </button>
-
-    <button
-      className="secondary"
-      onClick={() => moveStopInSelectedRoute(stop.id, 'down')}
-    >
-      <ArrowDown size={16} /> Down
-    </button>
-
-    <button
-      className="secondary"
-      onClick={() => startEditStop(stop)}
-    >
-      Edit
-    </button>
-  </div>
-
-  {/* Comments */}
-  <div style={{ marginTop: '1rem' }}>
-    <label
-      style={{
-        display: 'block',
-        fontWeight: 700,
-        marginBottom: '0.35rem',
-      }}
-    >
-      Comment / Issue
-    </label>
-
-    <textarea
-      placeholder="Add notes, access issues, damaged flag comments, etc..."
-      value={stop.comment || ''}
-      onChange={(event) => updateStopComment(stop.id, event.target.value)}
-    />
-  </div>
-
-  {/* Completion Actions */}
-  <div
-    className="actions"
-    style={{
-      marginTop: '1rem',
-    }}
-  >
-    <button
-      className={stop.posted ? 'success' : 'secondary'}
-      onClick={() => toggleStopStatus(stop.id, 'posted')}
-    >
-      {stop.posted ? 'Posted ✓' : 'Mark posted'}
-    </button>
-
-    <button
-      className={stop.pickedUp ? 'success' : 'secondary'}
-      onClick={() => toggleStopStatus(stop.id, 'pickedUp')}
-    >
-      {stop.pickedUp ? 'Picked up ✓' : 'Mark pickup'}
-    </button>
-  </div>
-
-  {/* Navigation Actions */}
-  <div
-    className="actions"
-    style={{
-      marginTop: '1rem',
-    }}
-  >
-    <button className="secondary">
-      Previous stop
-    </button>
-
-    <button>
-      Next stop
-    </button>
-
-    <button className="secondary">
-      Return to overview
-    </button>
-  </div>
-
-  {/* Dangerous Coordinator Action */}
-  <div
-    className="actions"
-    style={{
-      marginTop: '1.25rem',
-      borderTop: '1px solid #e2e8f0',
-      paddingTop: '1rem',
-    }}
-  >
-    <button
-      className="danger"
-      onClick={() => deleteStop(stop.id)}
-    >
-      <Trash2 size={16} /> Delete
-    </button>
-  </div>
-</article>
-          ))}
+        <div style={{ margin: '0.75rem 0 1rem' }}>
+          <a
+            className="button-link secondary"
+            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+              activeStop.address,
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Get directions
+          </a>
         </div>
-      </section>
+
+        {activeStop.instructions && (
+          <p className="small">
+            <strong>Instructions:</strong> {activeStop.instructions}
+          </p>
+        )}
+
+        {activeStop.phone && (
+          <p className="small">
+            <strong>Phone:</strong> {activeStop.phone}
+          </p>
+        )}
+
+        <div style={{ marginTop: '1rem' }}>
+          <label
+            style={{
+              display: 'block',
+              fontWeight: 700,
+              marginBottom: '0.35rem',
+            }}
+          >
+            Comment / Issue
+          </label>
+
+          <textarea
+            placeholder="Add notes, access issues, damaged flag comments, etc..."
+            value={activeStop.comment || ''}
+            onChange={(event) =>
+              updateStopComment(activeStop.id, event.target.value)
+            }
+          />
+        </div>
+
+        <div
+          className="actions"
+          style={{
+            marginTop: '1rem',
+          }}
+        >
+          <button
+            className={activeStop.posted ? 'success' : 'secondary'}
+            onClick={() => toggleStopStatus(activeStop.id, 'posted')}
+          >
+            {activeStop.posted ? 'Posted ✓' : 'Mark posted'}
+          </button>
+
+          <button
+            className={activeStop.pickedUp ? 'success' : 'secondary'}
+            onClick={() => toggleStopStatus(activeStop.id, 'pickedUp')}
+          >
+            {activeStop.pickedUp ? 'Picked up ✓' : 'Mark pickup'}
+          </button>
+        </div>
+
+        <div
+          className="actions"
+          style={{
+            marginTop: '1rem',
+          }}
+        >
+          <button
+            className="secondary"
+            disabled={activeStopIndex === 0}
+            onClick={() =>
+              setActiveStopIndex((current) => Math.max(0, current - 1))
+            }
+          >
+            Previous stop
+          </button>
+
+          <button
+            disabled={activeStopIndex >= selectedRoute.stops.length - 1}
+            onClick={() =>
+              setActiveStopIndex((current) =>
+                Math.min(selectedRoute.stops.length - 1, current + 1),
+              )
+            }
+          >
+            Next stop
+          </button>
+
+          <button
+            className="secondary"
+            onClick={() => setDriverMode('overview')}
+          >
+            Return to overview
+          </button>
+        </div>
+      </article>
+    )
+  )}
+</section>
     </main>
   )
 }
