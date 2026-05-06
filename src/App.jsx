@@ -566,14 +566,6 @@ export default function App() {
     </a>
   </div>
 
-  {/* Coordinates */}
-  {Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)) && (
-    <p className="small">
-      <strong>Coordinates:</strong> {Number(stop.lat).toFixed(5)},{' '}
-      {Number(stop.lng).toFixed(5)}
-    </p>
-  )}
-
   {/* Instructions */}
   {stop.instructions && (
     <p className="small">
