@@ -520,30 +520,40 @@ export default function App() {
   key={stop.id}
   style={{ borderLeft: `6px solid ${selectedRouteColor}` }}
 >
-  <div>
-    <div
-      style={{
-        background: selectedRouteColor,
-        color: 'white',
-        display: 'inline-block',
-        padding: '2px 8px',
-        borderRadius: '999px',
-        fontSize: '12px',
-        fontWeight: 700,
-        marginBottom: '8px',
-      }}
-    >
-      {selectedRoute?.name}
-    </div>
+  {/* Route Identity */}
+  <div
+    style={{
+      background: selectedRouteColor,
+      color: 'white',
+      display: 'inline-block',
+      padding: '2px 8px',
+      borderRadius: '999px',
+      fontSize: '12px',
+      fontWeight: 700,
+      marginBottom: '10px',
+    }}
+  >
+    {selectedRoute?.name}
+  </div>
 
-    <strong style={{ display: 'block', marginBottom: '0.5rem' }}>
-      {stop.customerName}
-    </strong>
+  {/* Customer */}
+  <strong
+    style={{
+      display: 'block',
+      marginBottom: '0.75rem',
+      fontSize: '1.05rem',
+    }}
+  >
+    {stop.customerName}
+  </strong>
 
-    <p>
-      <strong>Address:</strong> {stop.address}
-    </p>
+  {/* Address */}
+  <p>
+    <strong>Address:</strong> {stop.address}
+  </p>
 
+  {/* Directions */}
+  <div style={{ margin: '0.75rem 0 1rem' }}>
     <a
       className="button-link secondary"
       href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
@@ -551,50 +561,96 @@ export default function App() {
       )}`}
       target="_blank"
       rel="noopener noreferrer"
-      style={{ margin: '0.35rem 0 0.65rem' }}
     >
       Get directions
     </a>
-
-    {Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)) && (
-      <p className="small">
-        <strong>Coordinates:</strong> {Number(stop.lat).toFixed(5)},{' '}
-        {Number(stop.lng).toFixed(5)}
-      </p>
-    )}
-
-    {stop.instructions && (
-      <p className="small">
-        <strong>Instructions:</strong> {stop.instructions}
-      </p>
-    )}
-
-    {stop.email && (
-      <p className="small">
-        <strong>Email:</strong> {stop.email}
-      </p>
-    )}
-
-    {stop.phone && (
-      <p className="small">
-        <strong>Phone:</strong> {stop.phone}
-      </p>
-    )}
   </div>
 
-  <div className="actions">
-    <button className="secondary" onClick={() => moveStopInSelectedRoute(stop.id, 'up')}>
+  {/* Coordinates */}
+  {Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)) && (
+    <p className="small">
+      <strong>Coordinates:</strong> {Number(stop.lat).toFixed(5)},{' '}
+      {Number(stop.lng).toFixed(5)}
+    </p>
+  )}
+
+  {/* Instructions */}
+  {stop.instructions && (
+    <p className="small">
+      <strong>Instructions:</strong> {stop.instructions}
+    </p>
+  )}
+
+  {/* Phone */}
+  {stop.phone && (
+    <p className="small">
+      <strong>Phone:</strong> {stop.phone}
+    </p>
+  )}
+
+  {/* Email */}
+  {stop.email && (
+    <p className="small">
+      <strong>Email:</strong> {stop.email}
+    </p>
+  )}
+
+  {/* Coordinator Controls */}
+  <div
+    className="actions"
+    style={{
+      marginTop: '1rem',
+      marginBottom: '1rem',
+    }}
+  >
+    <button
+      className="secondary"
+      onClick={() => moveStopInSelectedRoute(stop.id, 'up')}
+    >
       <ArrowUp size={16} /> Up
     </button>
 
-    <button className="secondary" onClick={() => moveStopInSelectedRoute(stop.id, 'down')}>
+    <button
+      className="secondary"
+      onClick={() => moveStopInSelectedRoute(stop.id, 'down')}
+    >
       <ArrowDown size={16} /> Down
     </button>
 
-    <button className="secondary" onClick={() => startEditStop(stop)}>
+    <button
+      className="secondary"
+      onClick={() => startEditStop(stop)}
+    >
       Edit
     </button>
+  </div>
 
+  {/* Comments */}
+  <div style={{ marginTop: '1rem' }}>
+    <label
+      style={{
+        display: 'block',
+        fontWeight: 700,
+        marginBottom: '0.35rem',
+      }}
+    >
+      Comment / Issue
+    </label>
+
+    <textarea
+      placeholder="Add notes, access issues, damaged flag comments, etc..."
+      value={stop.comment || ''}
+      onChange={(event) => updateStopComment(stop.id, event.target.value)}
+    />
+  </div>
+
+  {/* Completion Actions */}
+  <div
+    className="actions"
+    style={{
+      marginTop: '1rem',
+    }}
+  >
     <button
       className={stop.posted ? 'success' : 'secondary'}
       onClick={() => toggleStopStatus(stop.id, 'posted')}
@@ -610,14 +666,39 @@ export default function App() {
     </button>
   </div>
 
-  <textarea
-    placeholder="Comment or issue..."
-    value={stop.comment || ''}
-    onChange={(event) => updateStopComment(stop.id, event.target.value)}
-  />
+  {/* Navigation Actions */}
+  <div
+    className="actions"
+    style={{
+      marginTop: '1rem',
+    }}
+  >
+    <button className="secondary">
+      Previous stop
+    </button>
 
-  <div className="actions">
-    <button className="danger" onClick={() => deleteStop(stop.id)}>
+    <button>
+      Next stop
+    </button>
+
+    <button className="secondary">
+      Return to overview
+    </button>
+  </div>
+
+  {/* Dangerous Coordinator Action */}
+  <div
+    className="actions"
+    style={{
+      marginTop: '1.25rem',
+      borderTop: '1px solid #e2e8f0',
+      paddingTop: '1rem',
+    }}
+  >
+    <button
+      className="danger"
+      onClick={() => deleteStop(stop.id)}
+    >
       <Trash2 size={16} /> Delete
     </button>
   </div>
