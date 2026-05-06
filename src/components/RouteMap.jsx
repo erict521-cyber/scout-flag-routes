@@ -61,20 +61,38 @@ export default function RouteMap({ routes }) {
         const latLng = [point.lat, point.lng]
         bounds.push(latLng)
 
-        L.circleMarker(latLng, {
-          radius: 8,
-          color,
-          fillColor: color,
-          fillOpacity: 0.85,
-          weight: 2,
-        })
-          .bindPopup(`
-            <strong>${route.name}</strong><br/>
-            Stop ${stopIndex + 1}<br/>
-            ${escapeHtml(point.stop.customerName)}<br/>
-            ${escapeHtml(point.stop.address)}
-          `)
-          .addTo(layer)
+        L.marker(latLng, {
+  icon: L.divIcon({
+    className: 'numbered-route-pin',
+    html: `
+      <div style="
+        background:${color};
+        color:white;
+        width:28px;
+        height:28px;
+        border-radius:999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-weight:800;
+        font-size:13px;
+        border:2px solid white;
+        box-shadow:0 2px 6px rgba(0,0,0,0.35);
+      ">
+        ${stopIndex + 1}
+      </div>
+    `,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  }),
+})
+  .bindPopup(`
+    <strong>${route.name}</strong><br/>
+    Stop ${stopIndex + 1}<br/>
+    ${escapeHtml(point.stop.customerName)}<br/>
+    ${escapeHtml(point.stop.address)}
+  `)
+  .addTo(layer)
       })
     })
 
