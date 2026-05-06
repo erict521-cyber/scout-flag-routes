@@ -442,18 +442,44 @@ function normalizeText(value) {
   <RouteMap routes={routes} />
 </section>
 
-      <section className="driver-view">
-        <div>
-          <p className="eyebrow">Driver / Navigator View</p>
-          <h2>{selectedRoute?.name || 'No route selected'}</h2>
-        </div>
+      const routeIndex = routes.findIndex((r) => r.id === selectedRoute?.id)
+const routeColor =
+  routeIndex >= 0
+    ? ROUTE_COLORS[routeIndex % ROUTE_COLORS.length]
+    : '#64748b'
 
-        <div className="stop-list">
-          {selectedRoute?.stops.map((stop) => (
-            <article className="stop-card" key={stop.id}>
-              <div>
-                <strong>{stop.customerName}</strong>
-                <p>{stop.address}</p>
+<section className="driver-view">
+  <div>
+    <p className="eyebrow">Driver / Navigator View</p>
+    <h2>{selectedRoute?.name || 'No route selected'}</h2>
+  </div>
+
+  <div className="stop-list">
+    {selectedRoute?.stops.map((stop) => (
+      <article
+        className="stop-card"
+        key={stop.id}
+        style={{ borderLeft: `6px solid ${routeColor}` }}
+      >
+        <div>
+          {/* ✅ Colored route label */}
+          <div
+            style={{
+              background: routeColor,
+              color: 'white',
+              display: 'inline-block',
+              padding: '2px 8px',
+              borderRadius: '999px',
+              fontSize: '12px',
+              fontWeight: 700,
+              marginBottom: '6px',
+            }}
+          >
+            {selectedRoute?.name}
+          </div>
+
+          <strong>{stop.customerName}</strong>
+          <p>{stop.address}</p>
 
 {Number.isFinite(stop.lat) && Number.isFinite(stop.lng) && (
   <p className="small">
