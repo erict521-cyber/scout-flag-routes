@@ -10,6 +10,8 @@ import {
   Upload,
   Users,
 Navigation,
+ArrowUp,
+ArrowDown,
 } from 'lucide-react'
 import { parseTroopWebHostCsv } from './services/troopWebHostCsv.js'
 import { buildBalancedRoutes } from './services/routingService.js'
@@ -57,6 +59,43 @@ useEffect(() => {
   function updateRouteOption(field, value) {
     setRouteOptions((current) => ({ ...current, [field]: Number(value) }))
   }
+
+function moveStopInSelectedRoute(stopId, direction) {
+  if (!selectedRoute) return
+
+  const currentRouteStops = [...selectedRoute.stops]
+  const currentIndex = currentRouteStops.findIndex((stop) => stop.id === stopId)
+
+  if (currentIndex === -1) return
+
+  const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+
+  if (newIndex < 0 || newIndex >= currentRouteStops.length) return
+
+  const [movedStop] = currentRouteStops.splice(currentIndex, 1)
+  currentRouteStops.splice(newIndex, 0, movedStop)
+
+  const orderById = new Map(
+    currentRouteStops.map((stop, index) => [
+      stop.id,
+      {
+        manualRouteId: selectedRoute.id,
+        manualOrder: index,
+      },
+    ]),
+  )
+
+  setStops((currentStops) =>
+    currentStops.map((stop) =>
+      orderById.has(stop.id)
+        ? {
+            ...stop,
+            ...orderById.get(stop.id),
+          }
+        : stop,
+    ),
+  )
+}
 
 async function geocodeMissingAddresses() {
   const missingGeo = stops.filter((stop) => !Number.isFinite(stop.lat) || !Number.isFinite(stop.lng))
@@ -421,7 +460,16 @@ function normalizeText(value) {
               </div>
 
               <div className="actions">
-                <button className="secondary" onClick={() => startEditStop(stop)}>Edit</button>
+               
+<button className="secondary" onClick={() => moveStopInSelectedRoute(stop.id, 'up')}>
+  <ArrowUp size={16} /> Up
+</button>
+
+<button className="secondary" onClick={() => moveStopInSelectedRoute(stop.id, 'down')}>
+  <ArrowDown size={16} /> Down
+</button>
+
+ <button className="secondary" onClick={() => startEditStop(stop)}>Edit</button>
                 <button className="danger" onClick={() => deleteStop(stop.id)}>
                   <Trash2 size={16} /> Delete
                 </button>
