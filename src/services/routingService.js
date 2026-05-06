@@ -23,8 +23,7 @@ export function buildBalancedRoutes(stops, options) {
       ...route,
       id: `route-${index + 1}`,
       name: `Route ${index + 1}`,
-      stops: orderStopsSafely(route.stops),
-    }))
+      stops: orderStopsSafely(route.stops, `route-${index + 1}`),
   } catch (error) {
     console.error('Route clustering failed, using fallback routing:', error)
     return buildFallbackRoutes(stops, getRouteCount(stops?.length || 0, options))
@@ -104,8 +103,18 @@ function recalculateCentroids(clusters, previousCentroids) {
   })
 }
 
-function orderStopsSafely(stops) {
+function orderStopsSafely(stops, routeId) {
   if (!Array.isArray(stops) || stops.length <= 2) return stops || []
+
+  const manuallyOrdered = stops.every(
+    (stop) =>
+      stop.manualRouteId === routeId &&
+      Number.isFinite(Number(stop.manualOrder)),
+  )
+
+  if (manuallyOrdered) {
+    return [...stops].sort((a, b) => Number(a.manualOrder) - Number(b.manualOrder))
+  }
 
   const geocoded = stops.filter(hasGeo)
   const ungeocoded = stops.filter((stop) => !hasGeo(stop))
