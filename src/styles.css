@@ -273,3 +273,16 @@ textarea {
   width: 100%;
   height: 100%;
 }
+
+.route-pill {
+  border: 2px solid transparent;
+}
+
+.route-pill.active {
+  outline: 4px solid #bfdbfe;
+  border-color: white;
+}
+
+.route-color-label {
+  font-weight: 900;
+}
