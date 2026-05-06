@@ -286,3 +286,20 @@ textarea {
 .route-color-label {
   font-weight: 900;
 }
+
+.button-link {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.button-link.secondary {
+  background: #e0e7ff;
+  color: #1e3a8a;
+}
