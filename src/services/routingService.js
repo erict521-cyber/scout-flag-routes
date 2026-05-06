@@ -20,10 +20,11 @@ export function buildBalancedRoutes(stops, options) {
     })
 
     return routes.map((route, index) => ({
-      ...route,
-      id: `route-${index + 1}`,
-      name: `Route ${index + 1}`,
-      stops: orderStopsSafely(route.stops, `route-${index + 1}`),
+  ...route,
+  id: `route-${index + 1}`,
+  name: `Route ${index + 1}`,
+  stops: orderStopsSafely(route.stops, `route-${index + 1}`),
+}))
   } catch (error) {
     console.error('Route clustering failed, using fallback routing:', error)
     return buildFallbackRoutes(stops, getRouteCount(stops?.length || 0, options))
