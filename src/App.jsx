@@ -59,7 +59,10 @@ export default function App() {
   const [appView, setAppView] = useState('coordinator')
   const [driverMode, setDriverMode] = useState('overview')
   const [activeStopIndex, setActiveStopIndex] = useState(0)
-
+const [autoAdvanceStops, setAutoAdvanceStops] = useState(() => {
+  const saved = localStorage.getItem('scoutFlagRoutes.autoAdvanceStops')
+  return saved ? JSON.parse(saved) : true
+})
 const [assignedRoutes, setAssignedRoutes] = useState(() => {
   const saved = localStorage.getItem('scoutFlagRoutes.assignedRoutes')
   return saved ? JSON.parse(saved) : {}
@@ -77,6 +80,13 @@ const [assignedRoutes, setAssignedRoutes] = useState(() => {
   const postedCountForRoute = selectedRoute?.stops.filter((stop) => stop.posted).length || 0
   const pickedUpCountForRoute = selectedRoute?.stops.filter((stop) => stop.pickedUp).length || 0
   const issueCountForRoute = selectedRoute?.stops.filter((stop) => stop.comment).length || 0
+
+useEffect(() => {
+  localStorage.setItem(
+    'scoutFlagRoutes.autoAdvanceStops',
+    JSON.stringify(autoAdvanceStops),
+  )
+}, [autoAdvanceStops])
 
 useEffect(() => {
   localStorage.setItem('scoutFlagRoutes.assignedRoutes', JSON.stringify(assignedRoutes))
@@ -121,6 +131,26 @@ function getSelectedRouteAssignment() {
       navigatorName: '',
     }
   )
+}
+
+function advanceToNextStop() {
+  if (!selectedRoute?.stops?.length) return
+
+  setActiveStopIndex((current) =>
+    Math.min(selectedRoute.stops.length - 1, current + 1),
+  )
+}
+
+function completeStop(stopId, field) {
+  toggleStopStatus(stopId, field)
+
+  if (!autoAdvanceStops) return
+
+  if (field === 'posted' || field === 'pickedUp') {
+    setTimeout(() => {
+      advanceToNextStop()
+    }, 250)
+  }
 }
 
 function updateSelectedRouteAssignment(field, value) {
@@ -650,6 +680,9 @@ assignment={getSelectedRouteAssignment()}
 updateAssignment={updateSelectedRouteAssignment}
 assignedRoutes={assignedRoutes}
 startOrContinueRoute={startOrContinueRoute}
+autoAdvanceStops={autoAdvanceStops}
+setAutoAdvanceStops={setAutoAdvanceStops}
+completeStop={completeStop}
         />
       )}
     </main>
@@ -879,6 +912,9 @@ assignment,
 updateAssignment,
 assignedRoutes,
 startOrContinueRoute,
+autoAdvanceStops,
+setAutoAdvanceStops,
+completeStop,
 }) {
   return (
     <section className="driver-view">
@@ -895,7 +931,17 @@ startOrContinueRoute,
             <Stat label="Picked Up" value={pickedUpCountForRoute} icon={<Flag />} />
             <Stat label="Issues" value={issueCountForRoute} icon={<AlertTriangle />} />
           </div>
-
+<label
+  className="checkbox-row"
+  style={{ marginTop: '1rem' }}
+>
+  <input
+    type="checkbox"
+    checked={autoAdvanceStops}
+    onChange={(event) => setAutoAdvanceStops(event.target.checked)}
+  />
+  Auto advance to next stop after completion
+</label>
          <div className="form-grid" style={{ marginTop: '1rem' }}>
   <TextField
   label="Driver name"
@@ -1004,14 +1050,14 @@ startOrContinueRoute,
             <div className="actions" style={{ marginTop: '1rem' }}>
               <button
                 className={activeStop.posted ? 'success' : 'secondary'}
-                onClick={() => toggleStopStatus(activeStop.id, 'posted')}
+                onClick={() => completeStop(activeStop.id, 'posted')}
               >
                 {activeStop.posted ? 'Posted ✓' : 'Mark posted'}
               </button>
 
               <button
                 className={activeStop.pickedUp ? 'success' : 'secondary'}
-                onClick={() => toggleStopStatus(activeStop.id, 'pickedUp')}
+                onClick={() => completeStop(activeStop.id, 'pickedUp')}
               >
                 {activeStop.pickedUp ? 'Picked up ✓' : 'Mark pickup'}
               </button>
