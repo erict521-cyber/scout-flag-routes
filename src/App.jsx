@@ -26,6 +26,12 @@ import {
   createScoutWorkspaceSheet,
   writeWorkspaceData,
 } from './services/googleSheetsService.js'
+import {
+  authorizeGoogleSheets,
+  createScoutWorkspaceSheet,
+  readWorkspaceData,
+  writeWorkspaceData,
+} from './services/googleSheetsService.js'
 
 const ROUTE_OPTIONS_DEFAULT = {
   availableDrivers: 4,
@@ -342,6 +348,44 @@ alert(
   }
 }
 
+async function loadWorkspaceFromGoogle() {
+  try {
+    setGoogleBusy(true)
+
+    if (!workspaceSpreadsheetId) {
+      alert('Create or connect a workspace sheet first.')
+      return
+    }
+
+    if (!googleConnected) {
+      await authorizeGoogleSheets()
+      setGoogleConnected(true)
+    }
+
+    const loaded = await readWorkspaceData(workspaceSpreadsheetId)
+
+    if (!loaded.stops.length) {
+      alert('No saved customer data found in this workspace sheet.')
+      return
+    }
+
+    setStops(loaded.stops)
+    selectRoute('route-1')
+
+    alert(`Loaded ${loaded.stops.length} stops from Google Sheets.`)
+  } catch (error) {
+    console.error('Google load error:', error)
+
+    alert(
+      `Failed to load workspace.\n\n${
+        error?.result?.error?.message || error?.message || JSON.stringify(error)
+      }`,
+    )
+  } finally {
+    setGoogleBusy(false)
+  }
+}
+
   async function geocodeMissingAddresses() {
     const missingGeo = stops.filter(
       (stop) => !Number.isFinite(Number(stop.lat)) || !Number.isFinite(Number(stop.lng)),
@@ -601,6 +645,14 @@ alert(
     >
       Save to Sheet
     </button>
+
+<button
+  className="secondary"
+  onClick={loadWorkspaceFromGoogle}
+  disabled={googleBusy}
+>
+  Load from Sheet
+</button>
   </div>
 
   {workspaceSpreadsheetUrl && (
