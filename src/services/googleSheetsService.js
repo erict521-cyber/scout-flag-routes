@@ -22,7 +22,9 @@ let gisReady = false
 
 export async function initializeGoogleSheets() {
   if (!CLIENT_ID || !API_KEY) {
-    throw new Error('Missing Google API config. Set VITE_GOOGLE_CLIENT_ID and VITE_GOOGLE_API_KEY.')
+    throw new Error(
+      'Missing Google API config. Set VITE_GOOGLE_CLIENT_ID and VITE_GOOGLE_API_KEY.',
+    )
   }
 
   await waitForGoogleScripts()
@@ -34,6 +36,7 @@ export async function initializeGoogleSheets() {
           apiKey: API_KEY,
           discoveryDocs: [DISCOVERY_DOC],
         })
+
         gapiReady = true
         resolve()
       } catch (error) {
@@ -67,7 +70,9 @@ export async function authorizeGoogleSheets() {
       resolve(response)
     }
 
-    tokenClient.requestAccessToken({ prompt: 'consent' })
+    tokenClient.requestAccessToken({
+      prompt: 'consent',
+    })
   })
 }
 
@@ -78,18 +83,38 @@ export async function createScoutWorkspaceSheet() {
     properties: {
       title: `Scout Flag Routes Workspace ${new Date().toLocaleDateString()}`,
     },
+
     sheets: [
-      { properties: { title: 'settings' } },
-      { properties: { title: 'customers' } },
-      { properties: { title: 'routes' } },
-      { properties: { title: 'route_stops' } },
+      {
+        properties: {
+          title: 'settings',
+        },
+      },
+      {
+        properties: {
+          title: 'customers',
+        },
+      },
+      {
+        properties: {
+          title: 'routes',
+        },
+      },
+      {
+        properties: {
+          title: 'route_stops',
+        },
+      },
     ],
   })
 
   return response.result
 }
 
-export async function writeWorkspaceData(spreadsheetId, { stops, routes, routeOptions }) {
+export async function writeWorkspaceData(
+  spreadsheetId,
+  { stops, routes, routeOptions },
+) {
   ensureReady()
 
   const valuesByRange = [
@@ -102,6 +127,7 @@ export async function writeWorkspaceData(spreadsheetId, { stops, routes, routeOp
         ['route_options', JSON.stringify(routeOptions)],
       ],
     },
+
     {
       range: 'customers!A1:K',
       values: [
@@ -118,6 +144,7 @@ export async function writeWorkspaceData(spreadsheetId, { stops, routes, routeOp
           'pickedUp',
           'comment',
         ],
+
         ...stops.map((stop) => [
           stop.id,
           stop.customerName || '',
@@ -133,10 +160,12 @@ export async function writeWorkspaceData(spreadsheetId, { stops, routes, routeOp
         ]),
       ],
     },
+
     {
       range: 'routes!A1:D',
       values: [
         ['routeId', 'routeName', 'stopCount', 'savedAt'],
+
         ...routes.map((route) => [
           route.id,
           route.name,
@@ -145,10 +174,12 @@ export async function writeWorkspaceData(spreadsheetId, { stops, routes, routeOp
         ]),
       ],
     },
+
     {
       range: 'route_stops!A1:F',
       values: [
         ['routeId', 'stopId', 'stopOrder', 'posted', 'pickedUp', 'comment'],
+
         ...routes.flatMap((route) =>
           route.stops.map((stop, index) => [
             route.id,
@@ -165,13 +196,22 @@ export async function writeWorkspaceData(spreadsheetId, { stops, routes, routeOp
 
   await window.gapi.client.sheets.spreadsheets.values.batchClear({
     spreadsheetId,
-    ranges: ['settings!A:Z', 'customers!A:Z', 'routes!A:Z', 'route_stops!A:Z'],
+
+    requestBody: {
+      ranges: [
+        'settings!A:Z',
+        'customers!A:Z',
+        'routes!A:Z',
+        'route_stops!A:Z',
+      ],
+    },
   })
 
   return window.gapi.client.sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
-    valueInputOption: 'RAW',
-    resource: {
+
+    requestBody: {
+      valueInputOption: 'RAW',
       data: valuesByRange,
     },
   })
