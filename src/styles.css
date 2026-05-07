@@ -254,7 +254,6 @@ textarea {
   .grid.two {
     grid-template-columns: 1fr;
   }
-}
 
   .hero-card {
     min-height: 150px;
@@ -264,6 +263,7 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
 
 .route-map {
   width: 100%;
