@@ -21,6 +21,11 @@ import { getDashboardStats } from './services/dashboardService.js'
 import { sampleStops } from './services/sampleData.js'
 import { geocodeAddress, wait } from './services/geocodingService.js'
 import './styles.css'
+import {
+  authorizeGoogleSheets,
+  createScoutWorkspaceSheet,
+  writeWorkspaceData,
+} from './services/googleSheetsService.js'
 
 const ROUTE_OPTIONS_DEFAULT = {
   availableDrivers: 4,
@@ -68,6 +73,18 @@ const [assignedRoutes, setAssignedRoutes] = useState(() => {
   return saved ? JSON.parse(saved) : {}
 })
 
+const [googleConnected, setGoogleConnected] = useState(false)
+
+const [workspaceSpreadsheetId, setWorkspaceSpreadsheetId] = useState(
+  () => localStorage.getItem('scoutFlagRoutes.workspaceSpreadsheetId') || '',
+)
+
+const [workspaceSpreadsheetUrl, setWorkspaceSpreadsheetUrl] = useState(
+  () => localStorage.getItem('scoutFlagRoutes.workspaceSpreadsheetUrl') || '',
+)
+
+const [googleBusy, setGoogleBusy] = useState(false)
+
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
   const dashboard = useMemo(() => getDashboardStats(routes), [routes])
   const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0]
@@ -80,6 +97,20 @@ const [assignedRoutes, setAssignedRoutes] = useState(() => {
   const postedCountForRoute = selectedRoute?.stops.filter((stop) => stop.posted).length || 0
   const pickedUpCountForRoute = selectedRoute?.stops.filter((stop) => stop.pickedUp).length || 0
   const issueCountForRoute = selectedRoute?.stops.filter((stop) => stop.comment).length || 0
+
+useEffect(() => {
+  localStorage.setItem(
+    'scoutFlagRoutes.workspaceSpreadsheetId',
+    workspaceSpreadsheetId,
+  )
+}, [workspaceSpreadsheetId])
+
+useEffect(() => {
+  localStorage.setItem(
+    'scoutFlagRoutes.workspaceSpreadsheetUrl',
+    workspaceSpreadsheetUrl,
+  )
+}, [workspaceSpreadsheetUrl])
 
 useEffect(() => {
   localStorage.setItem(
@@ -234,6 +265,75 @@ function startOrContinueRoute(type = 'posted') {
       ),
     )
   }
+
+async function connectGoogle() {
+  try {
+    setGoogleBusy(true)
+
+    await authorizeGoogleSheets()
+
+    setGoogleConnected(true)
+
+    alert('Google Sheets connected successfully.')
+  } catch (error) {
+    console.error(error)
+    alert(`Google connection failed.\n\n${error.message || error}`)
+  } finally {
+    setGoogleBusy(false)
+  }
+}
+
+async function createWorkspaceSheet() {
+  try {
+    setGoogleBusy(true)
+
+    if (!googleConnected) {
+      await authorizeGoogleSheets()
+      setGoogleConnected(true)
+    }
+
+    const sheet = await createScoutWorkspaceSheet()
+
+    setWorkspaceSpreadsheetId(sheet.spreadsheetId)
+    setWorkspaceSpreadsheetUrl(sheet.spreadsheetUrl)
+
+    alert('Workspace sheet created successfully.')
+  } catch (error) {
+    console.error(error)
+    alert(`Failed to create workspace sheet.\n\n${error.message || error}`)
+  } finally {
+    setGoogleBusy(false)
+  }
+}
+
+async function saveWorkspaceToGoogle() {
+  try {
+    setGoogleBusy(true)
+
+    if (!workspaceSpreadsheetId) {
+      alert('Create a workspace sheet first.')
+      return
+    }
+
+    if (!googleConnected) {
+      await authorizeGoogleSheets()
+      setGoogleConnected(true)
+    }
+
+    await writeWorkspaceData(workspaceSpreadsheetId, {
+      stops,
+      routes,
+      routeOptions,
+    })
+
+    alert('Workspace saved to Google Sheets.')
+  } catch (error) {
+    console.error(error)
+    alert(`Failed to save workspace.\n\n${error.message || error}`)
+  } finally {
+    setGoogleBusy(false)
+  }
+}
 
   async function geocodeMissingAddresses() {
     const missingGeo = stops.filter(
@@ -469,16 +569,46 @@ function startOrContinueRoute(type = 'posted') {
 
       <section className="grid two">
         <Panel icon={<MapPinned />} title="Troop Workspace">
-          <p>{workspaceStatus}</p>
-          <button
-            className="secondary"
-            onClick={() =>
-              setWorkspaceStatus('Future phase: connect or create troop-owned Google Sheet.')
-            }
-          >
-            Placeholder: Connect/Create Sheet
-          </button>
-        </Panel>
+  <p>{workspaceStatus}</p>
+
+  <div className="actions">
+    <button
+      className="secondary"
+      onClick={connectGoogle}
+      disabled={googleBusy}
+    >
+      {googleConnected ? 'Google Connected ✓' : 'Connect Google'}
+    </button>
+
+    <button
+      onClick={createWorkspaceSheet}
+      disabled={googleBusy}
+    >
+      Create Workspace Sheet
+    </button>
+
+    <button
+      className="secondary"
+      onClick={saveWorkspaceToGoogle}
+      disabled={googleBusy}
+    >
+      Save to Sheet
+    </button>
+  </div>
+
+  {workspaceSpreadsheetUrl && (
+    <p className="small" style={{ marginTop: '1rem' }}>
+      Workspace Sheet:{' '}
+      <a
+        href={workspaceSpreadsheetUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open Google Sheet
+      </a>
+    </p>
+  )}
+</Panel>
 
         <Panel icon={<Upload />} title="Import TroopWebHost CSV">
           <p>Use replace for a new clean import, or append to add another file to existing stops.</p>
