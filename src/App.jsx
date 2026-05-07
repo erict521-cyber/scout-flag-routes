@@ -21,11 +21,7 @@ import { getDashboardStats } from './services/dashboardService.js'
 import { sampleStops } from './services/sampleData.js'
 import { geocodeAddress, wait } from './services/geocodingService.js'
 import './styles.css'
-import {
-  authorizeGoogleSheets,
-  createScoutWorkspaceSheet,
-  writeWorkspaceData,
-} from './services/googleSheetsService.js'
+
 import {
   authorizeGoogleSheets,
   createScoutWorkspaceSheet,
