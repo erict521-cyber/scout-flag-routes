@@ -576,17 +576,34 @@ function startOrContinueRoute(type = 'posted') {
           <div className="route-list">
             {routes.map((route, index) => (
               <button
-                className={route.id === selectedRoute?.id ? 'route-pill active' : 'route-pill'}
-                key={route.id}
-                onClick={() => selectRoute(route.id)}
-                style={{
-                  background: ROUTE_COLORS[index % ROUTE_COLORS.length],
-                  color: 'white',
-                }}
-              >
-                <span className="route-color-label">{route.name}</span>
-                <span>{route.stops.length} stops</span>
-              </button>
+  className={route.id === selectedRoute?.id ? 'route-pill active' : 'route-pill'}
+  key={route.id}
+  onClick={() => selectRoute(route.id)}
+  style={{
+    background: ROUTE_COLORS[index % ROUTE_COLORS.length],
+    color: 'white',
+  }}
+>
+  <span className="route-color-label">{route.name}</span>
+
+  <span>{route.stops.length} stops</span>
+
+  <span>
+    Posted: {route.stops.filter((stop) => stop.posted).length}/
+    {route.stops.length}
+  </span>
+
+  <span>
+    Pickup: {route.stops.filter((stop) => stop.pickedUp).length}/
+    {route.stops.length}
+  </span>
+
+  {route.stops.filter((stop) => stop.comment).length > 0 && (
+    <span>
+      Issues: {route.stops.filter((stop) => stop.comment).length}
+    </span>
+  )}
+</button>
             ))}
           </div>
 
