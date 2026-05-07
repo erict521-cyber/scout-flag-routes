@@ -195,17 +195,17 @@ export async function writeWorkspaceData(
   ]
 
   await window.gapi.client.sheets.spreadsheets.values.batchClear({
-    spreadsheetId,
+  spreadsheetId,
 
-    requestBody: {
-      ranges: [
-        'settings!A:Z',
-        'customers!A:Z',
-        'routes!A:Z',
-        'route_stops!A:Z',
-      ],
-    },
-  })
+  resource: {
+    ranges: [
+      'settings!A:Z',
+      'customers!A:Z',
+      'routes!A:Z',
+      'route_stops!A:Z',
+    ],
+  },
+})
 
   return window.gapi.client.sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
