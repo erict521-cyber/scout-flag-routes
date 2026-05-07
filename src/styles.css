@@ -203,15 +203,24 @@ textarea {
   display: grid;
   gap: 0.15rem;
   border-radius: 1rem;
+  text-align: left;
+  min-width: 130px;
 }
 
 .route-pill span {
   font-size: 0.78rem;
   opacity: 0.85;
+  line-height: 1.15;
 }
 
 .route-pill.active {
   outline: 3px solid #bfdbfe;
+}
+
+.route-pill .route-color-label {
+  font-size: 0.95rem;
+  font-weight: 900;
+  opacity: 1;
 }
 
 .issue-log {
