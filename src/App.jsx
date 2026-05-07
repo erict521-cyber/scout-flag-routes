@@ -59,13 +59,6 @@ export default function App() {
   const [appView, setAppView] = useState('coordinator')
   const [driverMode, setDriverMode] = useState('overview')
   const [activeStopIndex, setActiveStopIndex] = useState(0)
-const [driverName, setDriverName] = useState(
-  () => localStorage.getItem('scoutFlagRoutes.driverName') || '',
-)
-
-const [navigatorName, setNavigatorName] = useState(
-  () => localStorage.getItem('scoutFlagRoutes.navigatorName') || '',
-)
 
 const [assignedRoutes, setAssignedRoutes] = useState(() => {
   const saved = localStorage.getItem('scoutFlagRoutes.assignedRoutes')
@@ -84,14 +77,6 @@ const [assignedRoutes, setAssignedRoutes] = useState(() => {
   const postedCountForRoute = selectedRoute?.stops.filter((stop) => stop.posted).length || 0
   const pickedUpCountForRoute = selectedRoute?.stops.filter((stop) => stop.pickedUp).length || 0
   const issueCountForRoute = selectedRoute?.stops.filter((stop) => stop.comment).length || 0
-
-useEffect(() => {
-  localStorage.setItem('scoutFlagRoutes.driverName', driverName)
-}, [driverName])
-
-useEffect(() => {
-  localStorage.setItem('scoutFlagRoutes.navigatorName', navigatorName)
-}, [navigatorName])
 
 useEffect(() => {
   localStorage.setItem('scoutFlagRoutes.assignedRoutes', JSON.stringify(assignedRoutes))
@@ -122,6 +107,35 @@ useEffect(() => {
   setDriverMode('overview')
 }
 
+function getSelectedRouteAssignment() {
+  if (!selectedRoute?.id) {
+    return {
+      driverName: '',
+      navigatorName: '',
+    }
+  }
+
+  return (
+    assignedRoutes[selectedRoute.id] || {
+      driverName: '',
+      navigatorName: '',
+    }
+  )
+}
+
+function updateSelectedRouteAssignment(field, value) {
+  if (!selectedRoute?.id) return
+
+  setAssignedRoutes((current) => ({
+    ...current,
+    [selectedRoute.id]: {
+      ...current[selectedRoute.id],
+      [field]: value,
+      assignedAt: current[selectedRoute.id]?.assignedAt || new Date().toISOString(),
+    },
+  }))
+}
+
 function getNextUnfinishedStopIndex(type = 'posted') {
   if (!selectedRoute?.stops?.length) return 0
 
@@ -135,31 +149,19 @@ function getNextUnfinishedStopIndex(type = 'posted') {
 function startOrContinueRoute(type = 'posted') {
   if (!selectedRoute?.id) return
 
-  const existingAssignment = assignedRoutes[selectedRoute.id]
+  const assignment = getSelectedRouteAssignment()
 
-  if (
-    existingAssignment &&
-    (existingAssignment.driverName || existingAssignment.navigatorName) &&
-    existingAssignment.driverName !== driverName
-  ) {
-    const proceed = confirm(
-      `${selectedRoute.name} is already assigned to ${
-        existingAssignment.driverName || 'another driver'
-      }${
-        existingAssignment.navigatorName
-          ? ` / ${existingAssignment.navigatorName}`
-          : ''
-      }.\n\nContinue anyway?`,
-    )
-
-    if (!proceed) return
+  if (!assignment.driverName.trim()) {
+    alert('Enter a driver name before starting the route.')
+    return
   }
 
   setAssignedRoutes((current) => ({
     ...current,
     [selectedRoute.id]: {
-      driverName,
-      navigatorName,
+      ...current[selectedRoute.id],
+      driverName: assignment.driverName,
+      navigatorName: assignment.navigatorName || '',
       assignedAt: current[selectedRoute.id]?.assignedAt || new Date().toISOString(),
     },
   }))
@@ -644,10 +646,8 @@ function startOrContinueRoute(type = 'posted') {
           updateStopComment={updateStopComment}
           toggleStopStatus={toggleStopStatus}
 
-driverName={driverName}
-setDriverName={setDriverName}
-navigatorName={navigatorName}
-setNavigatorName={setNavigatorName}
+assignment={getSelectedRouteAssignment()}
+updateAssignment={updateSelectedRouteAssignment}
 assignedRoutes={assignedRoutes}
 startOrContinueRoute={startOrContinueRoute}
         />
@@ -875,10 +875,8 @@ function DriverRouteView({
   issueCountForRoute,
   updateStopComment,
   toggleStopStatus,
-driverName,
-setDriverName,
-navigatorName,
-setNavigatorName,
+assignment,
+updateAssignment,
 assignedRoutes,
 startOrContinueRoute,
 }) {
@@ -899,16 +897,23 @@ startOrContinueRoute,
           </div>
 
          <div className="form-grid" style={{ marginTop: '1rem' }}>
-  <TextField label="Driver name" value={driverName} onChange={setDriverName} />
-  <TextField label="Navigator name" value={navigatorName} onChange={setNavigatorName} />
+  <TextField
+  label="Driver name"
+  value={assignment.driverName || ''}
+  onChange={(value) => updateAssignment('driverName', value)}
+/>
+
+<TextField
+  label="Navigator name"
+  value={assignment.navigatorName || ''}
+  onChange={(value) => updateAssignment('navigatorName', value)}
+/>
 </div>
 
-{assignedRoutes[selectedRoute?.id]?.driverName && (
+{assignment.driverName && (
   <p className="small">
-    Assigned to: <strong>{assignedRoutes[selectedRoute.id].driverName}</strong>
-    {assignedRoutes[selectedRoute.id].navigatorName
-      ? ` / ${assignedRoutes[selectedRoute.id].navigatorName}`
-      : ''}
+    Assigned to: <strong>{assignment.driverName}</strong>
+{assignment.navigatorName ? ` / ${assignment.navigatorName}` : ''}
   </p>
 )}
 
