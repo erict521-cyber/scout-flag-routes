@@ -208,14 +208,13 @@ export async function writeWorkspaceData(
 })
 
   return window.gapi.client.sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId,
+  spreadsheetId,
 
-    requestBody: {
-      valueInputOption: 'RAW',
-      data: valuesByRange,
-    },
-  })
-}
+  resource: {
+    valueInputOption: 'RAW',
+    data: valuesByRange,
+  },
+})
 
 function ensureReady() {
   if (!window.gapi?.client?.sheets) {
