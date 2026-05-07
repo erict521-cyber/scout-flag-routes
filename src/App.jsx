@@ -59,6 +59,18 @@ export default function App() {
   const [appView, setAppView] = useState('coordinator')
   const [driverMode, setDriverMode] = useState('overview')
   const [activeStopIndex, setActiveStopIndex] = useState(0)
+const [driverName, setDriverName] = useState(
+  () => localStorage.getItem('scoutFlagRoutes.driverName') || '',
+)
+
+const [navigatorName, setNavigatorName] = useState(
+  () => localStorage.getItem('scoutFlagRoutes.navigatorName') || '',
+)
+
+const [assignedRoutes, setAssignedRoutes] = useState(() => {
+  const saved = localStorage.getItem('scoutFlagRoutes.assignedRoutes')
+  return saved ? JSON.parse(saved) : {}
+})
 
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
   const dashboard = useMemo(() => getDashboardStats(routes), [routes])
@@ -73,6 +85,26 @@ export default function App() {
   const pickedUpCountForRoute = selectedRoute?.stops.filter((stop) => stop.pickedUp).length || 0
   const issueCountForRoute = selectedRoute?.stops.filter((stop) => stop.comment).length || 0
 
+useEffect(() => {
+  localStorage.setItem('scoutFlagRoutes.driverName', driverName)
+}, [driverName])
+
+useEffect(() => {
+  localStorage.setItem('scoutFlagRoutes.navigatorName', navigatorName)
+}, [navigatorName])
+
+useEffect(() => {
+  localStorage.setItem('scoutFlagRoutes.assignedRoutes', JSON.stringify(assignedRoutes))
+}, [assignedRoutes])
+
+useEffect(() => {
+  if (!selectedRoute?.id) return
+  localStorage.setItem(
+    `scoutFlagRoutes.activeStopIndex.${selectedRoute.id}`,
+    String(activeStopIndex),
+  )
+}, [activeStopIndex, selectedRoute?.id])
+
   useEffect(() => {
     localStorage.setItem('scoutFlagRoutes.stops', JSON.stringify(stops))
   }, [stops])
@@ -82,10 +114,59 @@ export default function App() {
   }
 
   function selectRoute(routeId) {
-    setSelectedRouteId(routeId)
-    setActiveStopIndex(0)
-    setDriverMode('overview')
+  setSelectedRouteId(routeId)
+
+  const savedIndex = localStorage.getItem(`scoutFlagRoutes.activeStopIndex.${routeId}`)
+  setActiveStopIndex(savedIndex ? Number(savedIndex) : 0)
+
+  setDriverMode('overview')
+}
+
+function getNextUnfinishedStopIndex(type = 'posted') {
+  if (!selectedRoute?.stops?.length) return 0
+
+  const index = selectedRoute.stops.findIndex((stop) =>
+    type === 'pickedUp' ? !stop.pickedUp : !stop.posted,
+  )
+
+  return index >= 0 ? index : selectedRoute.stops.length - 1
+}
+
+function startOrContinueRoute(type = 'posted') {
+  if (!selectedRoute?.id) return
+
+  const existingAssignment = assignedRoutes[selectedRoute.id]
+
+  if (
+    existingAssignment &&
+    (existingAssignment.driverName || existingAssignment.navigatorName) &&
+    existingAssignment.driverName !== driverName
+  ) {
+    const proceed = confirm(
+      `${selectedRoute.name} is already assigned to ${
+        existingAssignment.driverName || 'another driver'
+      }${
+        existingAssignment.navigatorName
+          ? ` / ${existingAssignment.navigatorName}`
+          : ''
+      }.\n\nContinue anyway?`,
+    )
+
+    if (!proceed) return
   }
+
+  setAssignedRoutes((current) => ({
+    ...current,
+    [selectedRoute.id]: {
+      driverName,
+      navigatorName,
+      assignedAt: current[selectedRoute.id]?.assignedAt || new Date().toISOString(),
+    },
+  }))
+
+  setActiveStopIndex(getNextUnfinishedStopIndex(type))
+  setDriverMode('active')
+}
 
   function moveStopInSelectedRoute(stopId, direction) {
     if (!selectedRoute) return
@@ -562,6 +643,13 @@ export default function App() {
           issueCountForRoute={issueCountForRoute}
           updateStopComment={updateStopComment}
           toggleStopStatus={toggleStopStatus}
+
+driverName={driverName}
+setDriverName={setDriverName}
+navigatorName={navigatorName}
+setNavigatorName={setNavigatorName}
+assignedRoutes={assignedRoutes}
+startOrContinueRoute={startOrContinueRoute}
         />
       )}
     </main>
@@ -787,6 +875,12 @@ function DriverRouteView({
   issueCountForRoute,
   updateStopComment,
   toggleStopStatus,
+driverName,
+setDriverName,
+navigatorName,
+setNavigatorName,
+assignedRoutes,
+startOrContinueRoute,
 }) {
   return (
     <section className="driver-view">
@@ -804,15 +898,32 @@ function DriverRouteView({
             <Stat label="Issues" value={issueCountForRoute} icon={<AlertTriangle />} />
           </div>
 
-          <button
-            onClick={() => setDriverMode('active')}
-            style={{
-              background: selectedRouteColor,
-              color: 'white',
-            }}
-          >
-            Start / Continue Route
-          </button>
+         <div className="form-grid" style={{ marginTop: '1rem' }}>
+  <TextField label="Driver name" value={driverName} onChange={setDriverName} />
+  <TextField label="Navigator name" value={navigatorName} onChange={setNavigatorName} />
+</div>
+
+{assignedRoutes[selectedRoute?.id]?.driverName && (
+  <p className="small">
+    Assigned to: <strong>{assignedRoutes[selectedRoute.id].driverName}</strong>
+    {assignedRoutes[selectedRoute.id].navigatorName
+      ? ` / ${assignedRoutes[selectedRoute.id].navigatorName}`
+      : ''}
+  </p>
+)}
+
+<div className="actions" style={{ marginTop: '1rem' }}>
+  <button
+    onClick={() => startOrContinueRoute('posted')}
+    style={{ background: selectedRouteColor, color: 'white' }}
+  >
+    Start / Continue Posting
+  </button>
+
+  <button className="secondary" onClick={() => startOrContinueRoute('pickedUp')}>
+    Start / Continue Pickup
+  </button>
+</div>
 
           <div style={{ marginTop: '1.5rem' }}>
             <RouteMap routes={routes} />
