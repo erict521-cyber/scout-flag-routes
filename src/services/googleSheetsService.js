@@ -215,6 +215,7 @@ export async function writeWorkspaceData(
     data: valuesByRange,
   },
 })
+}
 
 function ensureReady() {
   if (!window.gapi?.client?.sheets) {
