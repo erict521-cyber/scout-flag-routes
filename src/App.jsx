@@ -328,8 +328,15 @@ async function saveWorkspaceToGoogle() {
 
     alert('Workspace saved to Google Sheets.')
   } catch (error) {
-    console.error(error)
-    alert(`Failed to save workspace.\n\n${error.message || error}`)
+    console.error('Google save error:', error)
+
+alert(
+  `Failed to save workspace.\n\n${
+    error?.result?.error?.message ||
+    error?.message ||
+    JSON.stringify(error)
+  }`,
+)
   } finally {
     setGoogleBusy(false)
   }
