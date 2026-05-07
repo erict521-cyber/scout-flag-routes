@@ -217,6 +217,105 @@ export async function writeWorkspaceData(
 })
 }
 
+export async function readWorkspaceData(spreadsheetId) {
+  ensureReady()
+
+  const response = await window.gapi.client.sheets.spreadsheets.values.batchGet({
+    spreadsheetId,
+    ranges: ['settings!A:Z', 'customers!A:Z', 'route_stops!A:Z'],
+  })
+
+  const valueRanges = response.result.valueRanges || []
+
+  const customersValues = valueRanges.find((range) => range.range.startsWith('customers!'))?.values || []
+  const routeStopsValues = valueRanges.find((range) => range.range.startsWith('route_stops!'))?.values || []
+
+  const stops = parseCustomers(customersValues)
+  const routeStopMap = parseRouteStops(routeStopsValues)
+
+  const restoredStops = stops.map((stop) => {
+    const routeData = routeStopMap.get(stop.id)
+
+    if (!routeData) return stop
+
+    return {
+      ...stop,
+      manualRouteId: routeData.routeId,
+      manualOrder: routeData.stopOrder - 1,
+      posted: routeData.posted,
+      pickedUp: routeData.pickedUp,
+      comment: routeData.comment || stop.comment || '',
+    }
+  })
+
+  return {
+    stops: restoredStops,
+  }
+}
+
+function parseCustomers(values) {
+  const [headers = [], ...rows] = values
+
+  return rows
+    .map((row) => {
+      const record = rowToObject(headers, row)
+
+      return {
+        id: record.id,
+        customerName: record.customerName || '',
+        address: record.address || '',
+        email: record.email || '',
+        phone: record.phone || '',
+        instructions: record.instructions || '',
+        lat: parseOptionalNumber(record.lat),
+        lng: parseOptionalNumber(record.lng),
+        posted: parseBoolean(record.posted),
+        pickedUp: parseBoolean(record.pickedUp),
+        comment: record.comment || '',
+        postedAt: '',
+        pickedUpAt: '',
+      }
+    })
+    .filter((stop) => stop.id && stop.customerName && stop.address)
+}
+
+function parseRouteStops(values) {
+  const [headers = [], ...rows] = values
+  const routeStopMap = new Map()
+
+  rows.forEach((row) => {
+    const record = rowToObject(headers, row)
+
+    if (!record.stopId) return
+
+    routeStopMap.set(record.stopId, {
+      routeId: record.routeId,
+      stopOrder: Number(record.stopOrder) || 0,
+      posted: parseBoolean(record.posted),
+      pickedUp: parseBoolean(record.pickedUp),
+      comment: record.comment || '',
+    })
+  })
+
+  return routeStopMap
+}
+
+function rowToObject(headers, row) {
+  return headers.reduce((record, header, index) => {
+    record[header] = row[index] || ''
+    return record
+  }, {})
+}
+
+function parseBoolean(value) {
+  return String(value || '').toUpperCase() === 'TRUE'
+}
+
+function parseOptionalNumber(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
 function ensureReady() {
   if (!window.gapi?.client?.sheets) {
     throw new Error('Google Sheets is not initialized or authorized.')
