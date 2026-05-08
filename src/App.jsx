@@ -430,79 +430,103 @@ async function loadWorkspaceFromGoogle() {
 }
 
   async function geocodeMissingAddresses() {
-    const missingGeo = stops.filter((stop) => !hasValidCoordinates(stop))
+  const missingGeo = stops.filter((stop) => !hasValidCoordinates(stop))
 
-    if (missingGeo.length === 0) {
-      alert('All stops already have coordinates.')
-      return
-    }
-
-    if (
-      !confirm(
-        `Geocode ${missingGeo.length} missing addresses? This will run slowly to respect free API limits.`,
-      )
-    ) {
-      return
-    }
-
-    setIsGeocoding(true)
-
-    let updatedStops = [...stops]
-    let successCount = 0
-    let failedCount = 0
-
-    for (let i = 0; i < missingGeo.length; i += 1) {
-      const stop = missingGeo[i]
-      setGeocodeProgress(`Geocoding ${i + 1} of ${missingGeo.length}: ${stop.customerName}`)
-
-      try {
-        const suggestions = await geocodeAddressSuggestions(stop.address, 5)
-const result = suggestions[0]
-
-if (result) {
-  updatedStops = updatedStops.map((currentStop) =>
-    currentStop.id === stop.id
-      ? {
-          ...currentStop,
-          lat: result.lat,
-          lng: result.lng,
-          geocodeDisplayName: result.displayName,
-          geocodeProvider: result.provider,
-          geocodeSuggestions: suggestions,
-          geocodeStatus: 'success',
-          geocodeError: '',
-          geocodedAt: new Date().toISOString(),
-        }
-      : currentStop,
-  )
-  successCount += 1
-} else {
-  updatedStops = updatedStops.map((currentStop) =>
-    currentStop.id === stop.id
-      ? {
-          ...currentStop,
-          lat: null,
-          lng: null,
-          geocodeStatus: 'failed',
-          geocodeError: 'No geocode result found.',
-          geocodeSuggestions: [],
-        }
-      : currentStop,
-  )
-  failedCount += 1
-}
-
-      setStops(updatedStops)
-
-      if (i < missingGeo.length - 1) {
-        await wait(1100)
-      }
-    }
-
-    setIsGeocoding(false)
-    setGeocodeProgress('')
-    alert(`Geocoding complete.\n\nSuccess: ${successCount}\nFailed: ${failedCount}`)
+  if (missingGeo.length === 0) {
+    alert('All stops already have coordinates.')
+    return
   }
+
+  if (
+    !confirm(
+      `Geocode ${missingGeo.length} missing addresses? This will run slowly to respect free API limits.`,
+    )
+  ) {
+    return
+  }
+
+  setIsGeocoding(true)
+
+  let updatedStops = [...stops]
+  let successCount = 0
+  let failedCount = 0
+
+  for (let i = 0; i < missingGeo.length; i += 1) {
+    const stop = missingGeo[i]
+
+    setGeocodeProgress(
+      `Geocoding ${i + 1} of ${missingGeo.length}: ${stop.customerName}`,
+    )
+
+    try {
+      const suggestions = await geocodeAddressSuggestions(stop.address, 5)
+      const result = suggestions[0]
+
+      if (result) {
+        updatedStops = updatedStops.map((currentStop) =>
+          currentStop.id === stop.id
+            ? {
+                ...currentStop,
+                lat: result.lat,
+                lng: result.lng,
+                geocodeDisplayName: result.displayName,
+                geocodeProvider: result.provider,
+                geocodeSuggestions: suggestions,
+                geocodeStatus: 'success',
+                geocodeError: '',
+                geocodedAt: new Date().toISOString(),
+              }
+            : currentStop,
+        )
+
+        successCount += 1
+      } else {
+        updatedStops = updatedStops.map((currentStop) =>
+          currentStop.id === stop.id
+            ? {
+                ...currentStop,
+                lat: null,
+                lng: null,
+                geocodeStatus: 'failed',
+                geocodeError: 'No geocode result found.',
+                geocodeSuggestions: [],
+              }
+            : currentStop,
+        )
+
+        failedCount += 1
+      }
+    } catch (error) {
+      console.error(error)
+
+      updatedStops = updatedStops.map((currentStop) =>
+        currentStop.id === stop.id
+          ? {
+              ...currentStop,
+              lat: null,
+              lng: null,
+              geocodeStatus: 'failed',
+              geocodeError: error?.message || 'Geocoding failed.',
+              geocodeSuggestions: [],
+            }
+          : currentStop,
+      )
+
+      failedCount += 1
+    }
+
+    setStops(updatedStops)
+
+    if (i < missingGeo.length - 1) {
+      await wait(1100)
+    }
+  }
+
+  setIsGeocoding(false)
+  setGeocodeProgress('')
+
+  alert(`Geocoding complete.\n\nSuccess: ${successCount}\nFailed: ${failedCount}`)
+}
 
   async function handleCsvUpload(event) {
     const file = event.target.files?.[0]
