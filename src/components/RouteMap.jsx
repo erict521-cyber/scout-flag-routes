@@ -3,6 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
 const ROUTE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#0891b2']
+const MAX_MAP_RADIUS_MILES = 80
 
 export default function RouteMap({ routes }) {
   const mapRef = useRef(null)
@@ -33,6 +34,7 @@ export default function RouteMap({ routes }) {
 
     layer.clearLayers()
 
+    const allTrustedIds = getTrustedStopIds(routes)
     const bounds = []
 
     routes.forEach((route, routeIndex) => {
@@ -44,7 +46,7 @@ export default function RouteMap({ routes }) {
           lat: Number(stop.lat),
           lng: Number(stop.lng),
         }))
-        .filter((point) => hasValidCoordinateValue(point.lat) && hasValidCoordinateValue(point.lng))
+        .filter((point) => allTrustedIds.has(point.stop.id))
 
       if (routePoints.length > 1) {
         L.polyline(
@@ -62,37 +64,20 @@ export default function RouteMap({ routes }) {
         bounds.push(latLng)
 
         L.marker(latLng, {
-  icon: L.divIcon({
-    className: 'numbered-route-pin',
-    html: `
-      <div style="
-        background:${color};
-        color:white;
-        width:28px;
-        height:28px;
-        border-radius:999px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        font-weight:800;
-        font-size:13px;
-        border:2px solid white;
-        box-shadow:0 2px 6px rgba(0,0,0,0.35);
-      ">
-        ${stopIndex + 1}
-      </div>
-    `,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-  }),
-})
-  .bindPopup(`
-    <strong>${route.name}</strong><br/>
-    Stop ${stopIndex + 1}<br/>
-    ${escapeHtml(point.stop.customerName)}<br/>
-    ${escapeHtml(point.stop.address)}
-  `)
-  .addTo(layer)
+          icon: L.divIcon({
+            className: 'numbered-route-pin',
+            html: `<span style="background:${color}">${stopIndex + 1}</span>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+          }),
+        })
+          .bindPopup(`
+            <strong>${route.name}</strong><br/>
+            Stop ${stopIndex + 1}<br/>
+            ${escapeHtml(point.stop.customerName)}<br/>
+            ${escapeHtml(point.stop.address)}
+          `)
+          .addTo(layer)
       })
     })
 
@@ -118,9 +103,75 @@ export default function RouteMap({ routes }) {
   )
 }
 
-function hasValidCoordinateValue(value) {
-  if (value === null || value === undefined || value === '') return false
-  return Number.isFinite(Number(value))
+function getTrustedStopIds(routes) {
+  const points = routes
+    .flatMap((route) => route.stops)
+    .filter(hasValidCoordinateValue)
+
+  if (points.length <= 2) return new Set(points.map((stop) => stop.id))
+
+  const medianLat = median(points.map((stop) => Number(stop.lat)))
+  const medianLng = median(points.map((stop) => Number(stop.lng)))
+
+  return new Set(
+    points
+      .filter((stop) => {
+        const distance = distanceMiles(
+          Number(stop.lat),
+          Number(stop.lng),
+          medianLat,
+          medianLng,
+        )
+
+        return distance <= MAX_MAP_RADIUS_MILES
+      })
+      .map((stop) => stop.id),
+  )
+}
+
+function hasValidCoordinateValue(stop) {
+  if (stop?.lat === null || stop?.lat === undefined || stop?.lat === '') return false
+  if (stop?.lng === null || stop?.lng === undefined || stop?.lng === '') return false
+
+  const lat = Number(stop.lat)
+  const lng = Number(stop.lng)
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
+  if (lat === 0 && lng === 0) return false
+  if (lat < 18 || lat > 72) return false
+  if (lng < -180 || lng > -50) return false
+
+  return true
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2
+  }
+
+  return sorted[middle]
+}
+
+function distanceMiles(lat1, lng1, lat2, lng2) {
+  const earthRadiusMiles = 3958.8
+  const dLat = toRadians(lat2 - lat1)
+  const dLng = toRadians(lng2 - lng1)
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+
+  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180
 }
 
 function escapeHtml(value) {
