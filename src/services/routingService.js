@@ -1,4 +1,5 @@
 const MAX_ROUTE_RADIUS_MILES = 80
+const REVIEW_ROUTE_ID = 'needs-review'
 
 export function buildBalancedRoutes(stops, options = {}) {
   try {
@@ -6,17 +7,39 @@ export function buildBalancedRoutes(stops, options = {}) {
       return buildEmptyRoutes(1)
     }
 
-    const routeCount = getRouteCount(stops.length, options)
+    const routableStops = getTrustedGeocodedStops(stops)
+    const routableIds = new Set(routableStops.map((stop) => stop.id))
+    const reviewStops = stops.filter((stop) => !routableIds.has(stop.id))
 
-    if (hasUsableManualRouteAssignments(stops)) {
-      return buildRoutesFromManualAssignments(stops, routeCount)
+    const routeCount = getRouteCount(routableStops.length, options)
+
+    let routes
+
+    if (routableStops.length === 0) {
+      routes = buildEmptyRoutes(routeCount)
+    } else if (hasUsableManualRouteAssignments(routableStops)) {
+      routes = buildRoutesFromManualAssignments(routableStops, routeCount)
+    } else if (options.routingStyle === 'balanced') {
+      routes = buildBalancedGeographicBands(routableStops, routeCount)
+    } else {
+      routes = buildClusteredGeographicRoutes(routableStops, routeCount, options)
     }
 
-    if (options.routingStyle === 'balanced') {
-      return buildBalancedGeographicBands(stops, routeCount)
+    if (reviewStops.length > 0) {
+      routes.push({
+        id: REVIEW_ROUTE_ID,
+        name: 'Needs Review',
+        assignedDriver: '',
+        assignedNavigator: '',
+        isReviewRoute: true,
+        stops: reviewStops.map((stop) => ({
+          ...stop,
+          geocodeStatus: stop.geocodeStatus || 'needs_review',
+        })),
+      })
     }
 
-    return buildClusteredGeographicRoutes(stops, routeCount, options)
+    return routes
   } catch (error) {
     console.error('Route building failed, using fallback routing:', error)
     return buildFallbackRoutes(stops, getRouteCount(stops?.length || 0, options))
@@ -25,19 +48,16 @@ export function buildBalancedRoutes(stops, options = {}) {
 
 function buildClusteredGeographicRoutes(stops, routeCount, options) {
   const routes = buildEmptyRoutes(routeCount)
-  const geocodedStops = getTrustedGeocodedStops(stops)
-  const geocodedIds = new Set(geocodedStops.map((stop) => stop.id))
-  const ungeocodedStops = stops.filter((stop) => !geocodedIds.has(stop.id))
 
-  if (geocodedStops.length === 0 || geocodedStops.length < routeCount) {
+  if (stops.length === 0 || stops.length < routeCount) {
     return buildFallbackRoutes(stops, routeCount)
   }
 
-  let clusters = seedClustersBySpread(geocodedStops, routeCount)
+  let clusters = seedClustersBySpread(stops, routeCount)
 
   for (let i = 0; i < 10; i += 1) {
     const centroids = calculateCentroids(clusters)
-    clusters = assignStopsToCentroids(geocodedStops, centroids)
+    clusters = assignStopsToCentroids(stops, centroids)
     clusters = fillEmptyClusters(clusters)
   }
 
@@ -45,10 +65,6 @@ function buildClusteredGeographicRoutes(stops, routeCount, options) {
 
   clusters.forEach((clusterStops, index) => {
     routes[index].stops = clusterStops
-  })
-
-  ungeocodedStops.forEach((stop) => {
-    getSmallestRoute(routes).stops.push(stop)
   })
 
   return routes.map((route) => ({
@@ -249,15 +265,12 @@ function getSmallestClusterIndex(clusters) {
 
 function buildBalancedGeographicBands(stops, routeCount) {
   const routes = buildEmptyRoutes(routeCount)
-  const geocodedStops = getTrustedGeocodedStops(stops)
-  const geocodedIds = new Set(geocodedStops.map((stop) => stop.id))
-  const ungeocodedStops = stops.filter((stop) => !geocodedIds.has(stop.id))
 
-  if (geocodedStops.length === 0) {
+  if (stops.length === 0) {
     return buildFallbackRoutes(stops, routeCount)
   }
 
-  const sortedStops = [...geocodedStops].sort(compareByGeoThenName)
+  const sortedStops = [...stops].sort(compareByGeoThenName)
 
   sortedStops.forEach((stop, index) => {
     const routeIndex = Math.min(
@@ -266,10 +279,6 @@ function buildBalancedGeographicBands(stops, routeCount) {
     )
 
     routes[routeIndex].stops.push(stop)
-  })
-
-  ungeocodedStops.forEach((stop) => {
-    getSmallestRoute(routes).stops.push(stop)
   })
 
   return routes.map((route) => ({
@@ -284,7 +293,7 @@ function buildRoutesFromManualAssignments(stops, routeCount) {
   stops.forEach((stop) => {
     const routeIndex = getRouteIndexFromRouteId(stop.manualRouteId)
 
-    if (routeIndex >= 0 && routeIndex < routes.length && hasGeo(stop)) {
+    if (routeIndex >= 0 && routeIndex < routes.length) {
       routes[routeIndex].stops.push(stop)
     } else {
       getSmallestRoute(routes).stops.push(stop)
@@ -300,7 +309,6 @@ function buildRoutesFromManualAssignments(stops, routeCount) {
 function hasUsableManualRouteAssignments(stops) {
   const assignedRouteIds = new Set(
     stops
-      .filter(hasGeo)
       .map((stop) => stop.manualRouteId)
       .filter((routeId) => typeof routeId === 'string' && routeId.startsWith('route-')),
   )
@@ -311,24 +319,17 @@ function hasUsableManualRouteAssignments(stops) {
 function orderStopsSafely(stops, routeId) {
   if (!Array.isArray(stops) || stops.length <= 1) return stops || []
 
-  const trustedStops = getTrustedGeocodedStops(stops)
-  const trustedIds = new Set(trustedStops.map((stop) => stop.id))
-  const untrustedStops = stops.filter((stop) => !trustedIds.has(stop.id))
-
-  const manuallyOrderedStops = trustedStops.filter(
+  const manuallyOrderedStops = stops.filter(
     (stop) => stop.manualRouteId === routeId && Number.isFinite(Number(stop.manualOrder)),
   )
 
-  if (manuallyOrderedStops.length === trustedStops.length && trustedStops.length > 0) {
-    return [
-      ...trustedStops.sort((a, b) => Number(a.manualOrder) - Number(b.manualOrder)),
-      ...untrustedStops,
-    ]
+  if (manuallyOrderedStops.length === stops.length) {
+    return [...stops].sort((a, b) => Number(a.manualOrder) - Number(b.manualOrder))
   }
 
-  if (trustedStops.length <= 2) return [...trustedStops, ...untrustedStops]
+  if (stops.length <= 2) return stops
 
-  const remaining = [...trustedStops]
+  const remaining = [...stops]
   const ordered = [remaining.shift()]
 
   while (remaining.length > 0) {
@@ -349,15 +350,12 @@ function orderStopsSafely(stops, routeId) {
     ordered.push(remaining.splice(nearestIndex, 1)[0])
   }
 
-  return [...ordered, ...untrustedStops]
+  return ordered
 }
 
 function buildFallbackRoutes(stops, routeCount) {
   const routes = buildEmptyRoutes(routeCount)
-  const trustedStops = getTrustedGeocodedStops(stops)
-  const trustedIds = new Set(trustedStops.map((stop) => stop.id))
-  const remainingStops = (stops || []).filter((stop) => !trustedIds.has(stop.id))
-  const sortedStops = [...trustedStops, ...remainingStops].sort(compareByGeoThenName)
+  const sortedStops = [...(stops || [])].sort(compareByGeoThenName)
 
   sortedStops.forEach((stop, index) => {
     routes[index % routeCount].stops.push(stop)
