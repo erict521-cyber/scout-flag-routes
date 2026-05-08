@@ -34,6 +34,7 @@ const ROUTE_OPTIONS_DEFAULT = {
   maxRoutes: 6,
   minStopsPerRoute: 5,
   maxStopsPerRoute: 25,
+  routingStyle: 'geographic',
 }
 
 const EMPTY_FORM = {
@@ -138,8 +139,11 @@ useEffect(() => {
   }, [stops])
 
   function updateRouteOption(field, value) {
-    setRouteOptions((current) => ({ ...current, [field]: Number(value) }))
-  }
+  setRouteOptions((current) => ({
+    ...current,
+    [field]: field === 'routingStyle' ? value : Number(value),
+  }))
+}
 
   function selectRoute(routeId) {
   setSelectedRouteId(routeId)
@@ -725,6 +729,16 @@ async function loadWorkspaceFromGoogle() {
               min="1"
               onChange={(value) => updateRouteOption('maxStopsPerRoute', value)}
             />
+<label>
+  <span>Routing style</span>
+  <select
+    value={routeOptions.routingStyle}
+    onChange={(event) => updateRouteOption('routingStyle', event.target.value)}
+  >
+    <option value="geographic">Geographic grouping</option>
+    <option value="balanced">Balanced workload</option>
+  </select>
+</label>
           </div>
         </Panel>
 
