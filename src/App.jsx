@@ -79,7 +79,18 @@ const [assignedRoutes, setAssignedRoutes] = useState(() => {
   const saved = localStorage.getItem('scoutFlagRoutes.assignedRoutes')
   return saved ? JSON.parse(saved) : {}
 })
+const [setupStatus, setSetupStatus] = useState(() => {
+  const saved = localStorage.getItem('scoutFlagRoutes.setupStatus')
 
+  return saved
+    ? JSON.parse(saved)
+    : {
+        isSetupComplete: false,
+        setupCompletedAt: '',
+        routesDeployed: false,
+        routesDeployedAt: '',
+      }
+})
 const [googleConnected, setGoogleConnected] = useState(false)
 
 const [workspaceSpreadsheetId, setWorkspaceSpreadsheetId] = useState(
@@ -93,8 +104,16 @@ const [workspaceSpreadsheetUrl, setWorkspaceSpreadsheetUrl] = useState(
 const [googleBusy, setGoogleBusy] = useState(false)
 
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
-  const dashboard = useMemo(() => getDashboardStats(routes), [routes])
-  const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0]
+const dashboard = useMemo(() => getDashboardStats(routes), [routes])
+const reviewRoute = routes.find((route) => route.isReviewRoute)
+const reviewStopCount = reviewRoute?.stops?.length || 0
+const activeRoutes = routes.filter((route) => !route.isReviewRoute)
+const assignedRouteCount = activeRoutes.filter((route) => {
+  const assignment = assignedRoutes[route.id]
+
+  return assignment?.driverName?.trim()
+}).length
+const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0]
   const activeStop = selectedRoute?.stops?.[activeStopIndex] || null
 
   const selectedRouteIndex = routes.findIndex((route) => route.id === selectedRoute?.id)
@@ -127,8 +146,8 @@ useEffect(() => {
 }, [autoAdvanceStops])
 
 useEffect(() => {
-  localStorage.setItem('scoutFlagRoutes.assignedRoutes', JSON.stringify(assignedRoutes))
-}, [assignedRoutes])
+  localStorage.setItem('scoutFlagRoutes.setupStatus', JSON.stringify(setupStatus))
+}, [setupStatus])
 
 useEffect(() => {
   if (!selectedRoute?.id) return
@@ -143,6 +162,23 @@ useEffect(() => {
   }, [stops])
 
   function updateRouteOption(field, value) {
+  if (
+    setupStatus.isSetupComplete &&
+    !confirm(
+      'Route setup is already marked complete. Changing route settings will reopen setup and clear deployment status. Continue?',
+    )
+  ) {
+    return
+  }
+
+  setSetupStatus((current) => ({
+    ...current,
+    isSetupComplete: false,
+    setupCompletedAt: '',
+    routesDeployed: false,
+    routesDeployedAt: '',
+  }))
+
   setRouteOptions((current) => ({
     ...current,
     [field]: field === 'routingStyle' ? value : Number(value),
@@ -297,7 +333,19 @@ function hasValidCoordinates(stop) {
 }
 
 function recalculateRoutes() {
-  if (!confirm('Recalculate routes? This will clear manual route order edits.')) return
+  const message = setupStatus.isSetupComplete
+    ? 'Route setup is already marked complete. Recalculating will reopen setup, clear deployment status, and clear manual route order edits. Continue?'
+    : 'Recalculate routes? This will clear manual route order edits.'
+
+  if (!confirm(message)) return
+
+  setSetupStatus((current) => ({
+    ...current,
+    isSetupComplete: false,
+    setupCompletedAt: '',
+    routesDeployed: false,
+    routesDeployedAt: '',
+  }))
 
   setStops((currentStops) =>
     currentStops.map((stop) => {
@@ -311,6 +359,116 @@ function recalculateRoutes() {
   )
 
   selectRoute('route-1')
+}
+
+function markSetupComplete() {
+  if (reviewStopCount > 0) {
+    alert(
+      `Resolve ${reviewStopCount} Needs Review stop${
+        reviewStopCount === 1 ? '' : 's'
+      } before marking setup complete.`,
+    )
+
+    return
+  }
+
+  if (activeRoutes.length === 0) {
+    alert('Create at least one route before marking setup complete.')
+    return
+  }
+
+  if (
+    !confirm(
+      `Mark route setup complete?\n\nThis freezes the current route plan as the working setup. You can still reopen setup later by recalculating routes or changing route settings.`,
+    )
+  ) {
+    return
+  }
+
+  setSetupStatus({
+    isSetupComplete: true,
+    setupCompletedAt: new Date().toISOString(),
+    routesDeployed: false,
+    routesDeployedAt: '',
+  })
+
+  alert('Route setup marked complete. You can now deploy routes.')
+}
+
+async function deployRoutesToDrivers() {
+  if (!setupStatus.isSetupComplete) {
+    alert('Mark setup complete before deploying routes.')
+    return
+  }
+
+  if (reviewStopCount > 0) {
+    alert(
+      `Resolve ${reviewStopCount} Needs Review stop${
+        reviewStopCount === 1 ? '' : 's'
+      } before deploying routes.`,
+    )
+
+    return
+  }
+
+  const unassignedRoutes = activeRoutes.filter((route) => {
+    const assignment = assignedRoutes[route.id]
+
+    return !assignment?.driverName?.trim()
+  })
+
+  if (
+    unassignedRoutes.length > 0 &&
+    !confirm(
+      `${unassignedRoutes.length} route${
+        unassignedRoutes.length === 1 ? ' is' : 's are'
+      } missing a driver name. Deploy anyway?`,
+    )
+  ) {
+    return
+  }
+
+  const nextSetupStatus = {
+    ...setupStatus,
+    isSetupComplete: true,
+    routesDeployed: true,
+    routesDeployedAt: new Date().toISOString(),
+  }
+
+  setSetupStatus(nextSetupStatus)
+
+  try {
+    setGoogleBusy(true)
+
+    if (!workspaceSpreadsheetId) {
+      alert('Create a workspace sheet before deploying routes.')
+      return
+    }
+
+    if (!googleConnected) {
+      await authorizeGoogleSheets()
+      setGoogleConnected(true)
+    }
+
+    await writeWorkspaceData(workspaceSpreadsheetId, {
+      stops,
+      routes,
+      routeOptions,
+      assignedRoutes,
+      setupStatus: nextSetupStatus,
+    })
+
+    alert('Routes deployed and saved to Google Sheets.')
+  } catch (error) {
+    console.error('Route deployment error:', error)
+    alert(
+      `Failed to deploy routes.\n\n${
+        error?.result?.error?.message || error?.message || JSON.stringify(error)
+      }`,
+    )
+  } finally {
+    setGoogleBusy(false)
+  }
 }
 
 async function connectGoogle() {
@@ -372,6 +530,7 @@ async function saveWorkspaceToGoogle() {
   routes,
   routeOptions,
   assignedRoutes,
+  setupStatus,
 })
 
     alert('Workspace saved to Google Sheets.')
@@ -412,7 +571,23 @@ async function loadWorkspaceFromGoogle() {
     }
 
     setStops(loaded.stops)
-    selectRoute('route-1')
+
+if (loaded.routeOptions) {
+  setRouteOptions((current) => ({
+    ...current,
+    ...loaded.routeOptions,
+  }))
+}
+
+if (loaded.assignedRoutes) {
+  setAssignedRoutes(loaded.assignedRoutes)
+}
+
+if (loaded.setupStatus) {
+  setSetupStatus(loaded.setupStatus)
+}
+
+selectRoute('route-1')
 
     alert(`Loaded ${loaded.stops.length} stops from Google Sheets.`)
   } catch (error) {
@@ -854,7 +1029,30 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
         </Panel>
 
         <Panel icon={<Route />} title="Coordinator Dashboard">
-          <button onClick={startAddStop}>
+  <div className="status-card">
+    <strong>
+      Setup:{' '}
+      {setupStatus.isSetupComplete ? 'Complete' : 'Open'}
+    </strong>
+    <span>
+      Deployment:{' '}
+      {setupStatus.routesDeployed ? 'Routes deployed' : 'Not deployed'}
+    </span>
+    {setupStatus.setupCompletedAt && (
+      <span>Setup completed: {new Date(setupStatus.setupCompletedAt).toLocaleString()}</span>
+    )}
+    {setupStatus.routesDeployedAt && (
+      <span>Routes deployed: {new Date(setupStatus.routesDeployedAt).toLocaleString()}</span>
+    )}
+    <span>
+      Assigned routes: {assignedRouteCount}/{activeRoutes.length}
+    </span>
+    {reviewStopCount > 0 && (
+      <span>Needs Review stops: {reviewStopCount}</span>
+    )}
+  </div>
+
+  <button onClick={startAddStop}>
             <Plus size={16} /> Add customer
           </button>
 
@@ -882,12 +1080,32 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
           </button>
 
 <button className="secondary" onClick={recalculateRoutes}>
-  Recalculate routes
-</button>
 
-          <button className="secondary" onClick={() => setAppView('driver')}>
-            Driver mode
-          </button>
+  Recalculate routes
+
+</button>
+<button
+  className={setupStatus.isSetupComplete ? 'secondary' : ''}
+  onClick={markSetupComplete}
+  disabled={setupStatus.isSetupComplete}
+>
+
+  {setupStatus.isSetupComplete ? 'Setup Complete ✓' : 'Mark Setup Complete'}
+
+</button>
+<button
+  onClick={deployRoutesToDrivers}
+  disabled={!setupStatus.isSetupComplete || googleBusy}
+>
+
+  {setupStatus.routesDeployed ? 'Redeploy Routes' : 'Deploy Routes'}
+
+</button>
+<button className="secondary" onClick={() => setAppView('driver')}>
+
+  Driver mode
+
+</button>
 
           {geocodeProgress && <p className="small">{geocodeProgress}</p>}
 
