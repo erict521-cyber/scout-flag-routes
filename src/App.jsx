@@ -19,7 +19,11 @@ import { parseTroopWebHostCsv } from './services/troopWebHostCsv.js'
 import { buildBalancedRoutes } from './services/routingService.js'
 import { getDashboardStats } from './services/dashboardService.js'
 import { sampleStops } from './services/sampleData.js'
-import { geocodeAddress, wait } from './services/geocodingService.js'
+import {
+  geocodeAddress,
+  geocodeAddressSuggestions,
+  wait,
+} from './services/geocodingService.js'
 import './styles.css'
 
 import {
@@ -452,29 +456,41 @@ async function loadWorkspaceFromGoogle() {
       setGeocodeProgress(`Geocoding ${i + 1} of ${missingGeo.length}: ${stop.customerName}`)
 
       try {
-        const result = await geocodeAddress(stop.address)
+        const suggestions = await geocodeAddressSuggestions(stop.address, 5)
+const result = suggestions[0]
 
-        if (result) {
-          updatedStops = updatedStops.map((currentStop) =>
-            currentStop.id === stop.id
-              ? {
-                  ...currentStop,
-                  lat: result.lat,
-                  lng: result.lng,
-                  geocodeDisplayName: result.displayName,
-                  geocodeProvider: result.provider,
-                  geocodedAt: new Date().toISOString(),
-                }
-              : currentStop,
-          )
-          successCount += 1
-        } else {
-          failedCount += 1
+if (result) {
+  updatedStops = updatedStops.map((currentStop) =>
+    currentStop.id === stop.id
+      ? {
+          ...currentStop,
+          lat: result.lat,
+          lng: result.lng,
+          geocodeDisplayName: result.displayName,
+          geocodeProvider: result.provider,
+          geocodeSuggestions: suggestions,
+          geocodeStatus: 'success',
+          geocodeError: '',
+          geocodedAt: new Date().toISOString(),
         }
-      } catch (error) {
-        console.error(error)
-        failedCount += 1
-      }
+      : currentStop,
+  )
+  successCount += 1
+} else {
+  updatedStops = updatedStops.map((currentStop) =>
+    currentStop.id === stop.id
+      ? {
+          ...currentStop,
+          lat: null,
+          lng: null,
+          geocodeStatus: 'failed',
+          geocodeError: 'No geocode result found.',
+          geocodeSuggestions: [],
+        }
+      : currentStop,
+  )
+  failedCount += 1
+}
 
       setStops(updatedStops)
 
@@ -628,6 +644,27 @@ async function loadWorkspaceFromGoogle() {
       currentStops.map((stop) => (stop.id === stopId ? { ...stop, comment } : stop)),
     )
   }
+
+function acceptGeocodeSuggestion(stopId, suggestion) {
+  setStops((currentStops) =>
+    currentStops.map((stop) =>
+      stop.id === stopId
+        ? {
+            ...stop,
+            lat: suggestion.lat,
+            lng: suggestion.lng,
+            geocodeDisplayName: suggestion.displayName,
+            geocodeProvider: suggestion.provider,
+            geocodeStatus: 'success',
+            geocodeError: '',
+            geocodedAt: new Date().toISOString(),
+          }
+        : stop,
+    ),
+  )
+
+  recalculateRoutes()
+}
 
   return (
     <main className="app-shell">
@@ -830,7 +867,7 @@ async function loadWorkspaceFromGoogle() {
           <p className="small">Geocoding © OpenStreetMap contributors</p>
 
           <div className="route-list">
-            {routes.map((route, index) => (
+            {routes.filter((route) => !route.isReviewRoute).map((route, index) => (
               <button
   className={route.id === selectedRoute?.id ? 'route-pill active' : 'route-pill'}
   key={route.id}
@@ -973,7 +1010,90 @@ function CoordinatorOverview({
 }) {
   return (
     <>
-      <section className="panel">
+      
+{routes.find((route) => route.isReviewRoute)?.stops.length > 0 && (
+  <section className="panel">
+    <div className="panel-heading">
+      <AlertTriangle />
+      <h2>Needs Address Review</h2>
+    </div>
+
+    <p className="small">
+      These stops are not included in route optimization until their address is confirmed.
+    </p>
+
+    <div className="stop-list">
+      {routes
+        .find((route) => route.isReviewRoute)
+        .stops.map((stop) => (
+          <article
+            className="stop-card"
+            key={stop.id}
+            style={{ borderLeft: '6px solid #9333ea' }}
+          >
+            <div>
+              <div
+                style={{
+                  background: '#9333ea',
+                  color: 'white',
+                  display: 'inline-block',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  marginBottom: '6px',
+                }}
+              >
+                Needs Review
+              </div>
+
+              <strong>{stop.customerName}</strong>
+              <p>
+                <strong>Current address:</strong> {stop.address}
+              </p>
+
+              {stop.geocodeError && (
+                <p className="small">
+                  <strong>Issue:</strong> {stop.geocodeError}
+                </p>
+              )}
+
+              {stop.geocodeSuggestions?.length > 0 ? (
+                <div>
+                  <p className="small">
+                    <strong>Suggested matches:</strong>
+                  </p>
+
+                  {stop.geocodeSuggestions.map((suggestion, index) => (
+                    <div className="review-suggestion" key={`${stop.id}-${index}`}>
+                      <p className="small">{suggestion.displayName}</p>
+
+                      <button
+                        className="secondary"
+                        onClick={() => acceptGeocodeSuggestion(stop.id, suggestion)}
+                      >
+                        Accept this match
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="small">No suggested matches found.</p>
+              )}
+            </div>
+
+            <div className="actions">
+              <button className="secondary" onClick={() => startEditStop(stop)}>
+                Edit address
+              </button>
+            </div>
+          </article>
+        ))}
+    </div>
+  </section>
+)}
+
+<section className="panel">
         <div className="panel-heading">
           <MapPinned />
           <h2>Route Map</h2>
