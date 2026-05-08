@@ -683,6 +683,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
             geocodeProvider: suggestion.provider,
             geocodeStatus: 'success',
             geocodeError: '',
+            geocodeSuggestions: [suggestion],
             geocodedAt: new Date().toISOString(),
           }
         : stop,
