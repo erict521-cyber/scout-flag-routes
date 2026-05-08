@@ -277,7 +277,20 @@ function hasValidCoordinates(stop) {
   if (stop.lat === null || stop.lat === undefined || stop.lat === '') return false
   if (stop.lng === null || stop.lng === undefined || stop.lng === '') return false
 
-  return Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng))
+  const lat = Number(stop.lat)
+  const lng = Number(stop.lng)
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
+
+  // Reject null-equivalent bad coordinates and impossible campaign locations.
+  if (lat === 0 && lng === 0) return false
+
+  // MVP safety bounds for US-based Scout flag routes.
+  // This prevents bad geocodes from sending the map to oceans/other continents.
+  if (lat < 18 || lat > 72) return false
+  if (lng < -180 || lng > -50) return false
+
+  return true
 }
 
 function recalculateRoutes() {
