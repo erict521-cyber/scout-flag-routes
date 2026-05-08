@@ -23,7 +23,6 @@ export function buildBalancedRoutes(stops, options = {}) {
 
 function buildClusteredGeographicRoutes(stops, routeCount, options) {
   const routes = buildEmptyRoutes(routeCount)
-
   const geocodedStops = stops.filter(hasGeo)
   const ungeocodedStops = stops.filter((stop) => !hasGeo(stop))
 
@@ -55,6 +54,63 @@ function buildClusteredGeographicRoutes(stops, routeCount, options) {
   }))
 }
 
+function gentlyRebalanceClusters(clusters, options) {
+  const updated = clusters.map((cluster) => [...cluster])
+  const totalStops = updated.reduce((sum, cluster) => sum + cluster.length, 0)
+
+  if (totalStops === 0) return updated
+
+  const ideal = totalStops / updated.length
+  const geographicWeight = clamp(Number(options?.geographicWeight ?? 75), 0, 100)
+  const balancePressure = (100 - geographicWeight) / 100
+
+  const configuredMax = Number(options?.maxStopsPerRoute)
+  const configuredMin = Number(options?.minStopsPerRoute)
+
+  const calculatedSoftMax = Math.ceil(ideal * (1.15 + geographicWeight / 75))
+  const calculatedSoftMin = Math.floor(ideal * (0.25 + balancePressure * 0.65))
+
+  const softMax = Number.isFinite(configuredMax)
+    ? Math.min(configuredMax, calculatedSoftMax)
+    : calculatedSoftMax
+
+  const softMin = Number.isFinite(configuredMin)
+    ? Math.min(configuredMin, calculatedSoftMin)
+    : calculatedSoftMin
+
+  let changed = true
+  let guard = 0
+
+  while (changed && guard < 100) {
+    guard += 1
+    changed = false
+
+    const largestIndex = getLargestClusterIndex(updated)
+    const smallestIndex = getSmallestClusterIndex(updated)
+
+    if (largestIndex === smallestIndex) break
+
+    const largest = updated[largestIndex]
+    const smallest = updated[smallestIndex]
+
+    const largestTooLarge = largest.length > softMax
+    const smallestTooSmall = smallest.length < softMin
+
+    if (!largestTooLarge && !smallestTooSmall) break
+    if (largest.length <= 1) break
+
+    const targetCentroid = getClusterCentroid(smallest)
+    const moveIndex = findBestStopToMove(largest, targetCentroid)
+
+    const [movedStop] = largest.splice(moveIndex, 1)
+    smallest.push(movedStop)
+
+    changed = true
+  }
+
+  return updated
+}
+
 function seedClustersBySpread(stops, routeCount) {
   const sortedByLng = [...stops].sort((a, b) => Number(a.lng) - Number(b.lng))
   const sortedByLat = [...stops].sort((a, b) => Number(a.lat) - Number(b.lat))
@@ -82,10 +138,7 @@ function seedClustersBySpread(stops, routeCount) {
 function calculateCentroids(clusters) {
   return clusters.map((clusterStops) => {
     if (!clusterStops.length) {
-      return {
-        lat: 0,
-        lng: 0,
-      }
+      return { lat: 0, lng: 0 }
     }
 
     const total = clusterStops.reduce(
@@ -132,10 +185,7 @@ function fillEmptyClusters(clusters) {
     if (cluster.length > 0) return
 
     const largest = updated
-      .map((candidate, index) => ({
-        index,
-        size: candidate.length,
-      }))
+      .map((candidate, index) => ({ index, size: candidate.length }))
       .sort((a, b) => b.size - a.size)[0]
 
     if (!largest || updated[largest.index].length <= 1) return
@@ -143,58 +193,6 @@ function fillEmptyClusters(clusters) {
     const movedStop = updated[largest.index].pop()
     updated[emptyIndex].push(movedStop)
   })
-
-  return updated
-}
-
-function gentlyRebalanceClusters(clusters, options) {
-  const updated = clusters.map((cluster) => [...cluster])
-  const totalStops = updated.reduce((sum, cluster) => sum + cluster.length, 0)
-
-  if (totalStops === 0) return updated
-
-  const ideal = totalStops / updated.length
-
-  const configuredMax = Number(options?.maxStopsPerRoute)
-  const configuredMin = Number(options?.minStopsPerRoute)
-
-  const softMax = Number.isFinite(configuredMax)
-    ? configuredMax
-    : Math.ceil(ideal * 1.45)
-
-  const softMin = Number.isFinite(configuredMin)
-    ? Math.min(configuredMin, Math.floor(ideal * 0.75))
-    : Math.floor(ideal * 0.55)
-
-  let changed = true
-  let guard = 0
-
-  while (changed && guard < 100) {
-    guard += 1
-    changed = false
-
-    const largestIndex = getLargestClusterIndex(updated)
-    const smallestIndex = getSmallestClusterIndex(updated)
-
-    if (largestIndex === smallestIndex) break
-
-    const largest = updated[largestIndex]
-    const smallest = updated[smallestIndex]
-
-    const largestTooLarge = largest.length > softMax
-    const smallestTooSmall = smallest.length < softMin
-
-    if (!largestTooLarge && !smallestTooSmall) break
-    if (largest.length <= 1) break
-
-    const targetCentroid = getClusterCentroid(smallest)
-    const moveIndex = findBestStopToMove(largest, targetCentroid)
-
-    const [movedStop] = largest.splice(moveIndex, 1)
-    smallest.push(movedStop)
-
-    changed = true
-  }
 
   return updated
 }
@@ -238,19 +236,13 @@ function getClusterCentroid(clusterStops) {
 
 function getLargestClusterIndex(clusters) {
   return clusters
-    .map((cluster, index) => ({
-      index,
-      size: cluster.length,
-    }))
+    .map((cluster, index) => ({ index, size: cluster.length }))
     .sort((a, b) => b.size - a.size)[0].index
 }
 
 function getSmallestClusterIndex(clusters) {
   return clusters
-    .map((cluster, index) => ({
-      index,
-      size: cluster.length,
-    }))
+    .map((cluster, index) => ({ index, size: cluster.length }))
     .sort((a, b) => a.size - b.size)[0].index
 }
 
@@ -421,4 +413,8 @@ function hasGeo(stop) {
   if (stop?.lng === null || stop?.lng === undefined || stop?.lng === '') return false
 
   return Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng))
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
 }
