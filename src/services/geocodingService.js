@@ -1,4 +1,6 @@
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
+const CENSUS_GEOCODER_URL =
+  'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress'
 
 export async function geocodeAddress(address) {
   const suggestions = await geocodeAddressSuggestions(address, 1)
@@ -6,31 +8,37 @@ export async function geocodeAddress(address) {
 }
 
 export async function geocodeAddressSuggestions(address, limit = 5) {
+  const nominatimSuggestions = await geocodeWithNominatimVariants(address, limit)
+
+  if (nominatimSuggestions.length >= limit) {
+    return nominatimSuggestions.slice(0, limit)
+  }
+
+  const censusSuggestions = await geocodeWithCensus(address)
+
+  return dedupeSuggestions([...nominatimSuggestions, ...censusSuggestions]).slice(0, limit)
+}
+
+async function geocodeWithNominatimVariants(address, limit) {
   const queryVariants = buildAddressQueryVariants(address)
   const allSuggestions = []
 
   for (const query of queryVariants) {
     const suggestions = await fetchNominatimSuggestions(query, limit)
 
-    suggestions.forEach((suggestion) => {
-      const key = `${suggestion.lat}|${suggestion.lng}|${suggestion.displayName}`
-
-      if (!allSuggestions.some((existing) => existing.key === key)) {
-        allSuggestions.push({
-          ...suggestion,
-          key,
-          searchedQuery: query,
-        })
-      }
-    })
+    allSuggestions.push(
+      ...suggestions.map((suggestion) => ({
+        ...suggestion,
+        searchedQuery: query,
+      })),
+    )
 
     if (allSuggestions.length >= limit) break
 
-    // Be gentle with the free geocoder.
     await wait(300)
   }
 
-  return allSuggestions.slice(0, limit).map(({ key, ...suggestion }) => suggestion)
+  return dedupeSuggestions(allSuggestions)
 }
 
 async function fetchNominatimSuggestions(query, limit) {
@@ -49,7 +57,7 @@ async function fetchNominatimSuggestions(query, limit) {
   })
 
   if (!response.ok) {
-    throw new Error(`Geocoding failed: ${response.status}`)
+    throw new Error(`Nominatim geocoding failed: ${response.status}`)
   }
 
   const results = await response.json()
@@ -67,23 +75,85 @@ async function fetchNominatimSuggestions(query, limit) {
     .filter((result) => Number.isFinite(result.lat) && Number.isFinite(result.lng))
 }
 
+async function geocodeWithCensus(address) {
+  const url = new URL(CENSUS_GEOCODER_URL)
+
+  url.searchParams.set('address', normalizeAddressForCensus(address))
+  url.searchParams.set('benchmark', 'Public_AR_Current')
+  url.searchParams.set('format', 'json')
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Census geocoding failed: ${response.status}`)
+  }
+
+  const data = await response.json()
+  const matches = data?.result?.addressMatches || []
+
+  return matches
+    .map((match) => ({
+      lat: Number(match.coordinates?.y),
+      lng: Number(match.coordinates?.x),
+      displayName: match.matchedAddress || normalizeAddressForCensus(address),
+      provider: 'US Census Geocoder',
+      importance: null,
+      type: 'address_range',
+      category: 'census',
+    }))
+    .filter((result) => Number.isFinite(result.lat) && Number.isFinite(result.lng))
+}
+
 function buildAddressQueryVariants(address) {
   const original = normalizeSpaces(address)
+  const withoutUsa = normalizeSpaces(original.replace(/\bUSA\b/gi, ''))
 
   const variants = [
     original,
-    original.replace(/\bTX\b/i, 'Texas'),
-    original.replace(/\bUSA\b/i, ''),
+    withoutUsa,
+    original.replace(/\bTX\b/gi, 'Texas'),
+    withoutUsa.replace(/\bTX\b/gi, 'Texas'),
     original.replace(/\bSt\b/gi, 'Street'),
     original.replace(/\bTr\b/gi, 'Trail'),
     original.replace(/\bDr\b/gi, 'Drive'),
     original.replace(/\bCt\b/gi, 'Court'),
     original.replace(/\bLn\b/gi, 'Lane'),
-    original.replace(/\bLeague City TX\b/i, 'League City Texas'),
-    original.replace(/\bLeague City\s+TX\s+77573\b/i, 'League City, Texas 77573'),
+    original.replace(/\bEastland\b/gi, 'Eastlands'),
+    original.replace(/\bEastlands\b/gi, 'Eastland'),
+    original.replace(/\bMetairie Court\b/gi, 'Metairie St'),
+    original.replace(/\bMetairie Ct\b/gi, 'Metairie St'),
+    original.replace(/\bLeague City TX\b/gi, 'League City Texas'),
+    original.replace(/\bLeague City\s+TX\s+77573\b/gi, 'League City, Texas 77573'),
   ]
 
   return [...new Set(variants.map(normalizeSpaces).filter(Boolean))]
+}
+
+function normalizeAddressForCensus(address) {
+  return normalizeSpaces(String(address || '').replace(/\bUSA\b/gi, ''))
+}
+
+function dedupeSuggestions(suggestions) {
+  const seen = new Set()
+
+  return suggestions.filter((suggestion) => {
+    const key = `${roundCoordinate(suggestion.lat)}|${roundCoordinate(
+      suggestion.lng,
+    )}|${normalizeSpaces(suggestion.displayName).toLowerCase()}`
+
+    if (seen.has(key)) return false
+
+    seen.add(key)
+    return true
+  })
+}
+
+function roundCoordinate(value) {
+  return Number(value).toFixed(6)
 }
 
 function normalizeSpaces(value) {
