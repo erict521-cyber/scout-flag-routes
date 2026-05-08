@@ -1,3 +1,5 @@
+const MAX_ROUTE_RADIUS_MILES = 80
+
 export function buildBalancedRoutes(stops, options = {}) {
   try {
     if (!Array.isArray(stops) || stops.length === 0) {
@@ -23,8 +25,9 @@ export function buildBalancedRoutes(stops, options = {}) {
 
 function buildClusteredGeographicRoutes(stops, routeCount, options) {
   const routes = buildEmptyRoutes(routeCount)
-  const geocodedStops = stops.filter(hasGeo)
-  const ungeocodedStops = stops.filter((stop) => !hasGeo(stop))
+  const geocodedStops = getTrustedGeocodedStops(stops)
+  const geocodedIds = new Set(geocodedStops.map((stop) => stop.id))
+  const ungeocodedStops = stops.filter((stop) => !geocodedIds.has(stop.id))
 
   if (geocodedStops.length === 0 || geocodedStops.length < routeCount) {
     return buildFallbackRoutes(stops, routeCount)
@@ -137,9 +140,7 @@ function seedClustersBySpread(stops, routeCount) {
 
 function calculateCentroids(clusters) {
   return clusters.map((clusterStops) => {
-    if (!clusterStops.length) {
-      return { lat: 0, lng: 0 }
-    }
+    if (!clusterStops.length) return { lat: 0, lng: 0 }
 
     const total = clusterStops.reduce(
       (sum, stop) => ({
@@ -248,8 +249,9 @@ function getSmallestClusterIndex(clusters) {
 
 function buildBalancedGeographicBands(stops, routeCount) {
   const routes = buildEmptyRoutes(routeCount)
-  const geocodedStops = stops.filter(hasGeo)
-  const ungeocodedStops = stops.filter((stop) => !hasGeo(stop))
+  const geocodedStops = getTrustedGeocodedStops(stops)
+  const geocodedIds = new Set(geocodedStops.map((stop) => stop.id))
+  const ungeocodedStops = stops.filter((stop) => !geocodedIds.has(stop.id))
 
   if (geocodedStops.length === 0) {
     return buildFallbackRoutes(stops, routeCount)
@@ -282,7 +284,7 @@ function buildRoutesFromManualAssignments(stops, routeCount) {
   stops.forEach((stop) => {
     const routeIndex = getRouteIndexFromRouteId(stop.manualRouteId)
 
-    if (routeIndex >= 0 && routeIndex < routes.length) {
+    if (routeIndex >= 0 && routeIndex < routes.length && hasGeo(stop)) {
       routes[routeIndex].stops.push(stop)
     } else {
       getSmallestRoute(routes).stops.push(stop)
@@ -298,6 +300,7 @@ function buildRoutesFromManualAssignments(stops, routeCount) {
 function hasUsableManualRouteAssignments(stops) {
   const assignedRouteIds = new Set(
     stops
+      .filter(hasGeo)
       .map((stop) => stop.manualRouteId)
       .filter((routeId) => typeof routeId === 'string' && routeId.startsWith('route-')),
   )
@@ -308,20 +311,24 @@ function hasUsableManualRouteAssignments(stops) {
 function orderStopsSafely(stops, routeId) {
   if (!Array.isArray(stops) || stops.length <= 1) return stops || []
 
-  const manuallyOrderedStops = stops.filter(
+  const trustedStops = getTrustedGeocodedStops(stops)
+  const trustedIds = new Set(trustedStops.map((stop) => stop.id))
+  const untrustedStops = stops.filter((stop) => !trustedIds.has(stop.id))
+
+  const manuallyOrderedStops = trustedStops.filter(
     (stop) => stop.manualRouteId === routeId && Number.isFinite(Number(stop.manualOrder)),
   )
 
-  if (manuallyOrderedStops.length === stops.length) {
-    return [...stops].sort((a, b) => Number(a.manualOrder) - Number(b.manualOrder))
+  if (manuallyOrderedStops.length === trustedStops.length && trustedStops.length > 0) {
+    return [
+      ...trustedStops.sort((a, b) => Number(a.manualOrder) - Number(b.manualOrder)),
+      ...untrustedStops,
+    ]
   }
 
-  const geocoded = stops.filter(hasGeo)
-  const ungeocoded = stops.filter((stop) => !hasGeo(stop))
+  if (trustedStops.length <= 2) return [...trustedStops, ...untrustedStops]
 
-  if (geocoded.length <= 2) return [...geocoded, ...ungeocoded]
-
-  const remaining = [...geocoded]
+  const remaining = [...trustedStops]
   const ordered = [remaining.shift()]
 
   while (remaining.length > 0) {
@@ -342,12 +349,15 @@ function orderStopsSafely(stops, routeId) {
     ordered.push(remaining.splice(nearestIndex, 1)[0])
   }
 
-  return [...ordered, ...ungeocoded]
+  return [...ordered, ...untrustedStops]
 }
 
 function buildFallbackRoutes(stops, routeCount) {
   const routes = buildEmptyRoutes(routeCount)
-  const sortedStops = [...(stops || [])].sort(compareByGeoThenName)
+  const trustedStops = getTrustedGeocodedStops(stops)
+  const trustedIds = new Set(trustedStops.map((stop) => stop.id))
+  const remainingStops = (stops || []).filter((stop) => !trustedIds.has(stop.id))
+  const sortedStops = [...trustedStops, ...remainingStops].sort(compareByGeoThenName)
 
   sortedStops.forEach((stop, index) => {
     routes[index % routeCount].stops.push(stop)
@@ -391,14 +401,45 @@ function compareByGeoThenName(a, b) {
   const bHasGeo = hasGeo(b)
 
   if (aHasGeo && bHasGeo) {
-    if (a.lng !== b.lng) return Number(a.lng) - Number(b.lng)
-    if (a.lat !== b.lat) return Number(a.lat) - Number(b.lat)
+    if (Number(a.lng) !== Number(b.lng)) return Number(a.lng) - Number(b.lng)
+    if (Number(a.lat) !== Number(b.lat)) return Number(a.lat) - Number(b.lat)
   }
 
   if (aHasGeo && !bHasGeo) return -1
   if (!aHasGeo && bHasGeo) return 1
 
   return String(a.customerName || '').localeCompare(String(b.customerName || ''))
+}
+
+function getTrustedGeocodedStops(stops) {
+  const candidates = (stops || []).filter(hasGeo)
+
+  if (candidates.length <= 2) return candidates
+
+  const medianLat = median(candidates.map((stop) => Number(stop.lat)))
+  const medianLng = median(candidates.map((stop) => Number(stop.lng)))
+
+  return candidates.filter((stop) => {
+    const distance = distanceMiles(
+      Number(stop.lat),
+      Number(stop.lng),
+      medianLat,
+      medianLng,
+    )
+
+    return distance <= MAX_ROUTE_RADIUS_MILES
+  })
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2
+  }
+
+  return sorted[middle]
 }
 
 function distanceSquared(a, b) {
@@ -408,11 +449,38 @@ function distanceSquared(a, b) {
   return latDiff * latDiff + lngDiff * lngDiff
 }
 
+function distanceMiles(lat1, lng1, lat2, lng2) {
+  const earthRadiusMiles = 3958.8
+  const dLat = toRadians(lat2 - lat1)
+  const dLng = toRadians(lng2 - lng1)
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+
+  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180
+}
+
 function hasGeo(stop) {
   if (stop?.lat === null || stop?.lat === undefined || stop?.lat === '') return false
   if (stop?.lng === null || stop?.lng === undefined || stop?.lng === '') return false
 
-  return Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng))
+  const lat = Number(stop.lat)
+  const lng = Number(stop.lng)
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
+  if (lat === 0 && lng === 0) return false
+  if (lat < 18 || lat > 72) return false
+  if (lng < -180 || lng > -50) return false
+
+  return true
 }
 
 function clamp(value, min, max) {
