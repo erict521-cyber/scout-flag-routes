@@ -113,7 +113,7 @@ export async function createScoutWorkspaceSheet() {
 
 export async function writeWorkspaceData(
   spreadsheetId,
-  { stops, routes, routeOptions },
+  { stops, routes, routeOptions, assignedRoutes = {} },
 ) {
   ensureReady()
 
@@ -162,18 +162,33 @@ export async function writeWorkspaceData(
     },
 
     {
-      range: 'routes!A1:D',
-      values: [
-        ['routeId', 'routeName', 'stopCount', 'savedAt'],
+  range: 'routes!A1:G',
+  values: [
+    [
+      'routeId',
+      'routeName',
+      'stopCount',
+      'driverName',
+      'navigatorName',
+      'assignedAt',
+      'savedAt',
+    ],
 
-        ...routes.map((route) => [
-          route.id,
-          route.name,
-          route.stops.length,
-          new Date().toISOString(),
-        ]),
-      ],
-    },
+    ...routes.map((route) => {
+      const assignment = assignedRoutes[route.id] || {}
+
+      return [
+        route.id,
+        route.name,
+        route.stops.length,
+        assignment.driverName || '',
+        assignment.navigatorName || '',
+        assignment.assignedAt || '',
+        new Date().toISOString(),
+      ]
+    }),
+  ],
+},
 
     {
       range: 'route_stops!A1:F',
