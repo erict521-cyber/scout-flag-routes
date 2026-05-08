@@ -323,10 +323,11 @@ async function saveWorkspaceToGoogle() {
     }
 
     await writeWorkspaceData(workspaceSpreadsheetId, {
-      stops,
-      routes,
-      routeOptions,
-    })
+  stops,
+  routes,
+  routeOptions,
+  assignedRoutes,
+})
 
     alert('Workspace saved to Google Sheets.')
   } catch (error) {
