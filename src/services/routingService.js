@@ -1,119 +1,95 @@
 export function buildBalancedRoutes(stops, options) {
   try {
-    const routeCount = getRouteCount(stops.length, options)
-
     if (!Array.isArray(stops) || stops.length === 0) {
       return buildEmptyRoutes(1)
     }
 
-    const geocodedStops = stops.filter(hasGeo)
-    const ungeocodedStops = stops.filter((stop) => !hasGeo(stop))
+    const routeCount = getRouteCount(stops.length, options)
 
-    if (geocodedStops.length < routeCount) {
-      return buildFallbackRoutes(stops, routeCount)
+    if (hasUsableManualRouteAssignments(stops)) {
+      return buildRoutesFromManualAssignments(stops, routeCount)
     }
 
-    const routes = buildClusteredRoutes(geocodedStops, routeCount)
-
-    ungeocodedStops.forEach((stop) => {
-      getSmallestRoute(routes).stops.push(stop)
-    })
-
-    return routes.map((route, index) => ({
-  ...route,
-  id: `route-${index + 1}`,
-  name: `Route ${index + 1}`,
-  stops: orderStopsSafely(route.stops, `route-${index + 1}`),
-}))
+    return buildGeographicBalancedRoutes(stops, routeCount)
   } catch (error) {
-    console.error('Route clustering failed, using fallback routing:', error)
+    console.error('Route building failed, using fallback routing:', error)
     return buildFallbackRoutes(stops, getRouteCount(stops?.length || 0, options))
   }
 }
 
-function buildClusteredRoutes(stops, routeCount) {
-  const centroids = initializeCentroids(stops, routeCount)
-  let clusters = assignStops(stops, centroids)
+function buildGeographicBalancedRoutes(stops, routeCount) {
+  const routes = buildEmptyRoutes(routeCount)
 
-  for (let i = 0; i < 8; i += 1) {
-    const nextCentroids = recalculateCentroids(clusters, centroids)
-    clusters = assignStops(stops, nextCentroids)
+  const geocodedStops = stops.filter(hasGeo)
+  const ungeocodedStops = stops.filter((stop) => !hasGeo(stop))
+
+  if (geocodedStops.length === 0) {
+    return buildFallbackRoutes(stops, routeCount)
   }
 
-  return clusters.map((clusterStops, index) => ({
-    id: `route-${index + 1}`,
-    name: `Route ${index + 1}`,
-    assignedDriver: '',
-    assignedNavigator: '',
-    stops: clusterStops,
+  const sortedStops = [...geocodedStops].sort(compareByGeoThenName)
+
+  sortedStops.forEach((stop, index) => {
+    const routeIndex = Math.min(
+      routeCount - 1,
+      Math.floor((index * routeCount) / sortedStops.length),
+    )
+
+    routes[routeIndex].stops.push(stop)
+  })
+
+  ungeocodedStops.forEach((stop) => {
+    getSmallestRoute(routes).stops.push(stop)
+  })
+
+  return routes.map((route) => ({
+    ...route,
+    stops: orderStopsSafely(route.stops, route.id),
   }))
 }
 
-function initializeCentroids(stops, routeCount) {
-  const sorted = [...stops].sort((a, b) => a.lng - b.lng || a.lat - b.lat)
-
-  return Array.from({ length: routeCount }, (_, index) => {
-    const position = Math.floor((index * sorted.length) / routeCount)
-    const stop = sorted[Math.min(position, sorted.length - 1)]
-
-    return {
-      lat: stop.lat,
-      lng: stop.lng,
-    }
-  })
-}
-
-function assignStops(stops, centroids) {
-  const clusters = centroids.map(() => [])
+function buildRoutesFromManualAssignments(stops, routeCount) {
+  const routes = buildEmptyRoutes(routeCount)
 
   stops.forEach((stop) => {
-    let bestIndex = 0
-    let bestDistance = Number.POSITIVE_INFINITY
+    const routeIndex = getRouteIndexFromRouteId(stop.manualRouteId)
 
-    centroids.forEach((centroid, index) => {
-      const distance = distanceSquared(stop, centroid)
-
-      if (distance < bestDistance) {
-        bestDistance = distance
-        bestIndex = index
-      }
-    })
-
-    clusters[bestIndex].push(stop)
-  })
-
-  return clusters
-}
-
-function recalculateCentroids(clusters, previousCentroids) {
-  return clusters.map((clusterStops, index) => {
-    if (!clusterStops.length) return previousCentroids[index]
-
-    const total = clusterStops.reduce(
-      (sum, stop) => ({
-        lat: sum.lat + stop.lat,
-        lng: sum.lng + stop.lng,
-      }),
-      { lat: 0, lng: 0 },
-    )
-
-    return {
-      lat: total.lat / clusterStops.length,
-      lng: total.lng / clusterStops.length,
+    if (routeIndex >= 0 && routeIndex < routes.length) {
+      routes[routeIndex].stops.push(stop)
+    } else {
+      getSmallestRoute(routes).stops.push(stop)
     }
   })
+
+  return routes.map((route) => ({
+    ...route,
+    stops: orderStopsSafely(route.stops, route.id),
+  }))
+}
+
+function hasUsableManualRouteAssignments(stops) {
+  const assignedRouteIds = new Set(
+    stops
+      .map((stop) => stop.manualRouteId)
+      .filter((routeId) => typeof routeId === 'string' && routeId.startsWith('route-')),
+  )
+
+  // Important:
+  // If every stop is accidentally assigned to only route-1, ignore it and regenerate routes.
+  // That prevents the "Route 1 has everything / other routes empty" failure.
+  return assignedRouteIds.size > 1
 }
 
 function orderStopsSafely(stops, routeId) {
-  if (!Array.isArray(stops) || stops.length <= 2) return stops || []
+  if (!Array.isArray(stops) || stops.length <= 1) return stops || []
 
-  const manuallyOrdered = stops.every(
+  const manuallyOrderedStops = stops.filter(
     (stop) =>
       stop.manualRouteId === routeId &&
       Number.isFinite(Number(stop.manualOrder)),
   )
 
-  if (manuallyOrdered) {
+  if (manuallyOrderedStops.length === stops.length) {
     return [...stops].sort((a, b) => Number(a.manualOrder) - Number(b.manualOrder))
   }
 
@@ -170,6 +146,7 @@ function buildEmptyRoutes(routeCount) {
 function getRouteCount(stopCount, options) {
   const available = Math.max(1, Number(options?.availableDrivers) || 1)
   const maxRoutes = Math.max(1, Number(options?.maxRoutes) || available)
+
   return Math.max(1, Math.min(available, maxRoutes, stopCount || 1))
 }
 
@@ -179,14 +156,24 @@ function getSmallestRoute(routes) {
   )
 }
 
+function getRouteIndexFromRouteId(routeId) {
+  const match = String(routeId || '').match(/^route-(\d+)$/)
+  if (!match) return -1
+
+  return Number(match[1]) - 1
+}
+
 function compareByGeoThenName(a, b) {
   const aHasGeo = hasGeo(a)
   const bHasGeo = hasGeo(b)
 
   if (aHasGeo && bHasGeo) {
-    if (a.lat !== b.lat) return a.lat - b.lat
     if (a.lng !== b.lng) return a.lng - b.lng
+    if (a.lat !== b.lat) return a.lat - b.lat
   }
+
+  if (aHasGeo && !bHasGeo) return -1
+  if (!aHasGeo && bHasGeo) return 1
 
   return String(a.customerName || '').localeCompare(String(b.customerName || ''))
 }
@@ -194,6 +181,7 @@ function compareByGeoThenName(a, b) {
 function distanceSquared(a, b) {
   const latDiff = Number(a.lat) - Number(b.lat)
   const lngDiff = Number(a.lng) - Number(b.lng)
+
   return latDiff * latDiff + lngDiff * lngDiff
 }
 
