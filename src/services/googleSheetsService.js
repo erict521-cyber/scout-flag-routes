@@ -113,18 +113,33 @@ export async function createScoutWorkspaceSheet() {
 
 export async function writeWorkspaceData(
   spreadsheetId,
-  { stops, routes, routeOptions, assignedRoutes = {} },
+  {
+    stops,
+    routes,
+    routeOptions,
+    assignedRoutes = {},
+    setupStatus = {
+      isSetupComplete: false,
+      setupCompletedAt: '',
+      routesDeployed: false,
+      routesDeployedAt: '',
+    },
+  },
 ) {
   ensureReady()
 
   const valuesByRange = [
     {
-      range: 'settings!A1:B5',
+      range: 'settings!A1:B8',
       values: [
         ['key', 'value'],
-        ['schema_version', '1'],
+        ['schema_version', '2'],
         ['saved_at', new Date().toISOString()],
         ['route_options', JSON.stringify(routeOptions)],
+        ['assigned_routes', JSON.stringify(assignedRoutes)],
+        ['setup_status', JSON.stringify(setupStatus)],
+        ['setup_completed_at', setupStatus.setupCompletedAt || ''],
+        ['routes_deployed_at', setupStatus.routesDeployedAt || ''],
       ],
     },
 
@@ -253,10 +268,14 @@ export async function readWorkspaceData(spreadsheetId) {
   })
 
   const valueRanges = response.result.valueRanges || []
+  const settingsValues =
+    valueRanges.find((range) => range.range.startsWith('settings!'))?.values || []
+  const customersValues =
+    valueRanges.find((range) => range.range.startsWith('customers!'))?.values || []
+  const routeStopsValues =
+    valueRanges.find((range) => range.range.startsWith('route_stops!'))?.values || []
 
-  const customersValues = valueRanges.find((range) => range.range.startsWith('customers!'))?.values || []
-  const routeStopsValues = valueRanges.find((range) => range.range.startsWith('route_stops!'))?.values || []
-
+  const settings = parseSettings(settingsValues)
   const stops = parseCustomers(customersValues)
   const routeStopMap = parseRouteStops(routeStopsValues)
 
@@ -277,6 +296,35 @@ export async function readWorkspaceData(spreadsheetId) {
 
   return {
     stops: restoredStops,
+    routeOptions: parseJsonObject(settings.route_options),
+    assignedRoutes: parseJsonObject(settings.assigned_routes),
+    setupStatus: parseJsonObject(settings.setup_status),
+  }
+}
+
+function parseSettings(values) {
+  const [, ...rows] = values
+
+  return rows.reduce((settings, row) => {
+    const [key, value] = row
+
+    if (key) {
+      settings[key] = value || ''
+    }
+
+    return settings
+  }, {})
+}
+
+function parseJsonObject(value) {
+  if (!value) return null
+
+  try {
+    const parsed = JSON.parse(value)
+
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
   }
 }
 
