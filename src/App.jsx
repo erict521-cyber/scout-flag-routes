@@ -517,7 +517,7 @@ async function loadWorkspaceFromGoogle() {
     setStops(updatedStops)
 
     if (i < missingGeo.length - 1) {
-      await wait(1100)
+      await wait(250)
     }
   }
 
