@@ -279,6 +279,23 @@ function hasValidCoordinates(stop) {
   return Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng))
 }
 
+function recalculateRoutes() {
+  if (!confirm('Recalculate routes? This will clear manual route order edits.')) return
+
+  setStops((currentStops) =>
+    currentStops.map((stop) => {
+      const updatedStop = { ...stop }
+
+      delete updatedStop.manualRouteId
+      delete updatedStop.manualOrder
+
+      return updatedStop
+    }),
+  )
+
+  selectRoute('route-1')
+}
+
 async function connectGoogle() {
   try {
     setGoogleBusy(true)
@@ -769,6 +786,10 @@ async function loadWorkspaceFromGoogle() {
           <button className="secondary" onClick={() => setAppView('editRoute')}>
             Edit route order
           </button>
+
+<button className="secondary" onClick={recalculateRoutes}>
+  Recalculate routes
+</button>
 
           <button className="secondary" onClick={() => setAppView('driver')}>
             Driver mode
