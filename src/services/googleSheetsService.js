@@ -129,35 +129,47 @@ export async function writeWorkspaceData(
     },
 
     {
-      range: 'customers!A1:K',
+      range: 'customers!A1:Q',
       values: [
         [
-          'id',
-          'customerName',
-          'address',
-          'email',
-          'phone',
-          'instructions',
-          'lat',
-          'lng',
-          'posted',
-          'pickedUp',
-          'comment',
-        ],
+  'id',
+  'customerName',
+  'address',
+  'email',
+  'phone',
+  'instructions',
+  'lat',
+  'lng',
+  'posted',
+  'pickedUp',
+  'comment',
+  'geocodeStatus',
+  'geocodeProvider',
+  'geocodeDisplayName',
+  'geocodeError',
+  'geocodedAt',
+  'geocodeSuggestionsJson',
+],
 
         ...stops.map((stop) => [
-          stop.id,
-          stop.customerName || '',
-          stop.address || '',
-          stop.email || '',
-          stop.phone || '',
-          stop.instructions || '',
-          stop.lat ?? '',
-          stop.lng ?? '',
-          stop.posted ? 'TRUE' : 'FALSE',
-          stop.pickedUp ? 'TRUE' : 'FALSE',
-          stop.comment || '',
-        ]),
+  stop.id,
+  stop.customerName || '',
+  stop.address || '',
+  stop.email || '',
+  stop.phone || '',
+  stop.instructions || '',
+  stop.lat ?? '',
+  stop.lng ?? '',
+  stop.posted ? 'TRUE' : 'FALSE',
+  stop.pickedUp ? 'TRUE' : 'FALSE',
+  stop.comment || '',
+  stop.geocodeStatus || '',
+  stop.geocodeProvider || '',
+  stop.geocodeDisplayName || '',
+  stop.geocodeError || '',
+  stop.geocodedAt || '',
+  JSON.stringify(stop.geocodeSuggestions || []),
+]),
       ],
     },
 
@@ -276,20 +288,26 @@ function parseCustomers(values) {
       const record = rowToObject(headers, row)
 
       return {
-        id: record.id,
-        customerName: record.customerName || '',
-        address: record.address || '',
-        email: record.email || '',
-        phone: record.phone || '',
-        instructions: record.instructions || '',
-        lat: parseOptionalNumber(record.lat),
-        lng: parseOptionalNumber(record.lng),
-        posted: parseBoolean(record.posted),
-        pickedUp: parseBoolean(record.pickedUp),
-        comment: record.comment || '',
-        postedAt: '',
-        pickedUpAt: '',
-      }
+  id: record.id,
+  customerName: record.customerName || '',
+  address: record.address || '',
+  email: record.email || '',
+  phone: record.phone || '',
+  instructions: record.instructions || '',
+  lat: parseOptionalNumber(record.lat),
+  lng: parseOptionalNumber(record.lng),
+  posted: parseBoolean(record.posted),
+  pickedUp: parseBoolean(record.pickedUp),
+  comment: record.comment || '',
+  geocodeStatus: record.geocodeStatus || '',
+  geocodeProvider: record.geocodeProvider || '',
+  geocodeDisplayName: record.geocodeDisplayName || '',
+  geocodeError: record.geocodeError || '',
+  geocodedAt: record.geocodedAt || '',
+  geocodeSuggestions: parseJsonArray(record.geocodeSuggestionsJson),
+  postedAt: '',
+  pickedUpAt: '',
+}
     })
     .filter((stop) => stop.id && stop.customerName && stop.address)
 }
@@ -329,6 +347,18 @@ function parseBoolean(value) {
 function parseOptionalNumber(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number : null
+}
+
+function parseJsonArray(value) {
+  if (!value) return []
+
+  try {
+    const parsed = JSON.parse(value)
+
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 function ensureReady() {
