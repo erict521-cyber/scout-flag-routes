@@ -7,7 +7,7 @@ export async function geocodeAddress(address) {
 }
 
 export async function geocodeAddressSuggestions(address, limit = 5) {
-  const suggestions = []
+  if (!address?.trim()) return []
 
   if (APPS_SCRIPT_GEOCODER_URL) {
     const googleSuggestions = await safelyRunGeocoder(
@@ -15,19 +15,15 @@ export async function geocodeAddressSuggestions(address, limit = 5) {
       'Apps Script Google Geocoder',
     )
 
-    suggestions.push(...googleSuggestions)
+    return dedupeSuggestions(googleSuggestions).slice(0, limit)
   }
 
-  if (suggestions.length < limit) {
-    const nominatimSuggestions = await safelyRunGeocoder(
-      () => geocodeWithNominatim(address, limit),
-      'Nominatim',
-    )
+  const nominatimSuggestions = await safelyRunGeocoder(
+    () => geocodeWithNominatim(address, limit),
+    'Nominatim development fallback',
+  )
 
-    suggestions.push(...nominatimSuggestions)
-  }
-
-  return dedupeSuggestions(suggestions).slice(0, limit)
+  return dedupeSuggestions(nominatimSuggestions).slice(0, limit)
 }
 
 async function geocodeWithAppsScript(address, limit) {
