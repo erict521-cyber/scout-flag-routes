@@ -44,7 +44,7 @@ export default function RouteMap({ routes }) {
           lat: Number(stop.lat),
           lng: Number(stop.lng),
         }))
-        .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+        .filter((point) => hasValidCoordinateValue(point.lat) && hasValidCoordinateValue(point.lng))
 
       if (routePoints.length > 1) {
         L.polyline(
@@ -116,6 +116,11 @@ export default function RouteMap({ routes }) {
       }}
     />
   )
+}
+
+function hasValidCoordinateValue(value) {
+  if (value === null || value === undefined || value === '') return false
+  return Number.isFinite(Number(value))
 }
 
 function escapeHtml(value) {
