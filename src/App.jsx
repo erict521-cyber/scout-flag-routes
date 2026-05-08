@@ -432,13 +432,13 @@ async function loadWorkspaceFromGoogle() {
   const missingGeo = stops.filter((stop) => !hasValidCoordinates(stop))
 
   if (missingGeo.length === 0) {
-    alert('All stops already have coordinates.')
+    alert('All stops already have validated coordinates.')
     return
   }
 
   if (
     !confirm(
-      `Geocode ${missingGeo.length} missing addresses? This will run slowly to respect free API limits.`,
+      `Validate ${missingGeo.length} addresses? This will check missing or failed address locations.`,
     )
   ) {
     return
@@ -452,52 +452,53 @@ async function loadWorkspaceFromGoogle() {
 
   for (let i = 0; i < missingGeo.length; i += 1) {
     const stop = missingGeo[i]
+    let suggestions = []
+    let lastError = null
 
-    setGeocodeProgress(
-      `Geocoding ${i + 1} of ${missingGeo.length}: ${stop.customerName}`,
-    )
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      setGeocodeProgress(
+        `Validating address ${i + 1} of ${missingGeo.length}: ${
+          stop.customerName
+        }${attempt > 1 ? ` — retry ${attempt}` : ''}`,
+      )
 
-    try {
-      const suggestions = await geocodeAddressSuggestions(stop.address, 5)
-      const result = suggestions[0]
+      try {
+        suggestions = await geocodeAddressSuggestions(stop.address, 5)
 
-      if (result) {
-        updatedStops = updatedStops.map((currentStop) =>
-          currentStop.id === stop.id
-            ? {
-                ...currentStop,
-                lat: result.lat,
-                lng: result.lng,
-                geocodeDisplayName: result.displayName,
-                geocodeProvider: result.provider,
-                geocodeSuggestions: suggestions,
-                geocodeStatus: 'success',
-                geocodeError: '',
-                geocodedAt: new Date().toISOString(),
-              }
-            : currentStop,
-        )
-
-        successCount += 1
-      } else {
-        updatedStops = updatedStops.map((currentStop) =>
-          currentStop.id === stop.id
-            ? {
-                ...currentStop,
-                lat: null,
-                lng: null,
-                geocodeStatus: 'failed',
-                geocodeError: 'No geocode result found.',
-                geocodeSuggestions: [],
-              }
-            : currentStop,
-        )
-
-        failedCount += 1
+        if (suggestions.length > 0) {
+          break
+        }
+      } catch (error) {
+        console.error(error)
+        lastError = error
       }
-    } catch (error) {
-      console.error(error)
 
+      if (attempt < 3) {
+        await wait(350)
+      }
+    }
+
+    const result = suggestions[0]
+
+    if (result) {
+      updatedStops = updatedStops.map((currentStop) =>
+        currentStop.id === stop.id
+          ? {
+              ...currentStop,
+              lat: result.lat,
+              lng: result.lng,
+              geocodeDisplayName: result.displayName,
+              geocodeProvider: result.provider,
+              geocodeSuggestions: suggestions,
+              geocodeStatus: 'success',
+              geocodeError: '',
+              geocodedAt: new Date().toISOString(),
+            }
+          : currentStop,
+      )
+
+      successCount += 1
+    } else {
       updatedStops = updatedStops.map((currentStop) =>
         currentStop.id === stop.id
           ? {
@@ -505,8 +506,10 @@ async function loadWorkspaceFromGoogle() {
               lat: null,
               lng: null,
               geocodeStatus: 'failed',
-              geocodeError: error?.message || 'Geocoding failed.',
-              geocodeSuggestions: [],
+              geocodeError:
+                lastError?.message ||
+                'No validated address result found after 3 attempts.',
+              geocodeSuggestions: suggestions,
             }
           : currentStop,
       )
@@ -524,7 +527,7 @@ async function loadWorkspaceFromGoogle() {
   setIsGeocoding(false)
   setGeocodeProgress('')
 
-  alert(`Geocoding complete.\n\nSuccess: ${successCount}\nFailed: ${failedCount}`)
+  alert(`Address validation complete.\n\nSuccess: ${successCount}\nFailed: ${failedCount}`)
 }
 
   async function handleCsvUpload(event) {
@@ -868,7 +871,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
 
           <button className="secondary" onClick={geocodeMissingAddresses} disabled={isGeocoding}>
             <Navigation size={16} />
-            {isGeocoding ? 'Geocoding...' : 'Geocode missing'}
+            {isGeocoding ? 'Validating...' : 'Validate Addresses'}
           </button>
 
           <button onClick={() => setAppView('coordinator')}>Coordinator overview</button>
@@ -887,9 +890,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
 
           {geocodeProgress && <p className="small">{geocodeProgress}</p>}
 
-          <p className="small">Geocoding © OpenStreetMap contributors</p>
-
-          <div className="route-list">
+         <div className="route-list">
             {routes.filter((route) => !route.isReviewRoute).map((route, index) => (
               <button
   className={route.id === selectedRoute?.id ? 'route-pill active' : 'route-pill'}
