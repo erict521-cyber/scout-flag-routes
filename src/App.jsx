@@ -35,6 +35,7 @@ const ROUTE_OPTIONS_DEFAULT = {
   minStopsPerRoute: 5,
   maxStopsPerRoute: 25,
   routingStyle: 'geographic',
+  geographicWeight: 75,
 }
 
 const EMPTY_FORM = {
@@ -754,7 +755,23 @@ async function loadWorkspaceFromGoogle() {
   >
     <option value="geographic">Geographic grouping</option>
     <option value="balanced">Balanced workload</option>
-  </select>
+</select>
+</label>
+
+<label>
+  <span>
+    Balance vs geography: {routeOptions.geographicWeight ?? 75}%
+  </span>
+  <input
+    type="range"
+    min="0"
+    max="100"
+    value={routeOptions.geographicWeight ?? 75}
+    onChange={(event) => updateRouteOption('geographicWeight', event.target.value)}
+  />
+  <span className="small">
+    0 = balanced workload, 100 = cleaner geography
+  </span>
 </label>
           </div>
         </Panel>
