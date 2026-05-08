@@ -36,6 +36,7 @@ jobs:
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || './' }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_API_KEY: ${{ vars.VITE_GOOGLE_API_KEY }}
+          VITE_APPS_SCRIPT_GEOCODER_URL: ${{ vars.VITE_APPS_SCRIPT_GEOCODER_URL }}
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4
