@@ -355,3 +355,79 @@ textarea {
     min-width: 0;
   }
 }
+
+/* Coordinator dashboard control cleanup */
+.panel .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1rem 0;
+}
+
+.panel .actions button,
+.panel .actions .file-button,
+.panel .actions .button-link {
+  min-height: 44px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.panel .actions + .small,
+.panel .actions + p,
+.panel .small + .route-list,
+.panel p + .route-list {
+  margin-top: 1rem;
+}
+
+.route-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.route-pill {
+  width: 100%;
+  min-width: 0;
+  min-height: 96px;
+  padding: 1rem;
+  align-content: start;
+}
+
+.route-pill span {
+  line-height: 1.25;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 1rem;
+  }
+
+  .panel .actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+  }
+
+  .panel .actions button,
+  .panel .actions .file-button,
+  .panel .actions .button-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .route-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .route-pill {
+    min-height: 104px;
+    padding: 0.9rem;
+  }
+}
