@@ -186,5 +186,8 @@ function distanceSquared(a, b) {
 }
 
 function hasGeo(stop) {
-  return Number.isFinite(Number(stop?.lat)) && Number.isFinite(Number(stop?.lng))
+  if (stop?.lat === null || stop?.lat === undefined || stop?.lat === '') return false
+  if (stop?.lng === null || stop?.lng === undefined || stop?.lng === '') return false
+
+  return Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng))
 }
