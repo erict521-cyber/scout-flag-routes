@@ -268,6 +268,13 @@ function startOrContinueRoute(type = 'posted') {
     )
   }
 
+function hasValidCoordinates(stop) {
+  if (stop.lat === null || stop.lat === undefined || stop.lat === '') return false
+  if (stop.lng === null || stop.lng === undefined || stop.lng === '') return false
+
+  return Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng))
+}
+
 async function connectGoogle() {
   try {
     setGoogleBusy(true)
@@ -384,9 +391,7 @@ async function loadWorkspaceFromGoogle() {
 }
 
   async function geocodeMissingAddresses() {
-    const missingGeo = stops.filter(
-      (stop) => !Number.isFinite(Number(stop.lat)) || !Number.isFinite(Number(stop.lng)),
-    )
+    const missingGeo = stops.filter((stop) => !hasValidCoordinates(stop))
 
     if (missingGeo.length === 0) {
       alert('All stops already have coordinates.')
