@@ -31,6 +31,7 @@ import {
   readWorkspaceData,
   writeWorkspaceData,
 } from './services/googleSheetsService.js'
+import { pickGoogleSpreadsheet } from './services/googlePickerService.js'
 
 const ROUTE_OPTIONS_DEFAULT = {
   availableDrivers: 4,
@@ -532,6 +533,67 @@ async function createWorkspaceSheet() {
   }
 }
 
+async function chooseExistingWorkspaceSheet() {
+  try {
+    setGoogleBusy(true)
+
+    if (!googleConnected) {
+      await authorizeGoogleSheets()
+      setGoogleConnected(true)
+    }
+
+    const selectedSheet = await pickGoogleSpreadsheet()
+
+    if (!selectedSheet) return
+
+    setWorkspaceSpreadsheetId(selectedSheet.spreadsheetId)
+    setWorkspaceSpreadsheetUrl(selectedSheet.spreadsheetUrl)
+
+    const shouldLoadNow = confirm(
+      `Connected workspace sheet:\n\n${selectedSheet.spreadsheetName || selectedSheet.spreadsheetId}\n\nLoad data from this Sheet now?`,
+    )
+
+    if (!shouldLoadNow) return
+
+    const loaded = await readWorkspaceData(selectedSheet.spreadsheetId)
+
+    if (!loaded.stops.length) {
+      alert('No saved customer data found in this workspace sheet.')
+      return
+    }
+
+    setStops(loaded.stops)
+
+    if (loaded.routeOptions) {
+      setRouteOptions((current) => ({
+        ...current,
+        ...loaded.routeOptions,
+      }))
+    }
+
+    if (loaded.assignedRoutes) {
+      setAssignedRoutes(loaded.assignedRoutes)
+    }
+
+    if (loaded.setupStatus) {
+      setSetupStatus(loaded.setupStatus)
+    }
+
+    selectRoute('route-1')
+
+    alert(`Loaded ${loaded.stops.length} stops from Google Sheets.`)
+  } catch (error) {
+    console.error('Google Picker error:', error)
+    alert(
+      `Failed to choose workspace sheet.\n\n${
+        error?.result?.error?.message || error?.message || JSON.stringify(error)
+      }`,
+    )
+  } finally {
+    setGoogleBusy(false)
+  }
+}
+
 async function saveWorkspaceToGoogle() {
   try {
     setGoogleBusy(true)
@@ -951,50 +1013,35 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
   <p>{workspaceStatus}</p>
 
   <div className="actions">
-    <button
-      className="secondary"
-      onClick={connectGoogle}
-      disabled={googleBusy}
-    >
-      {googleConnected ? 'Google Connected ✓' : 'Connect Google'}
-    </button>
-
-    <button
-      onClick={createWorkspaceSheet}
-      disabled={googleBusy}
-    >
-      Create Workspace Sheet
-    </button>
-
-    <button
-      className="secondary"
-      onClick={saveWorkspaceToGoogle}
-      disabled={googleBusy}
-    >
-      Save to Sheet
-    </button>
-
-<button
-  className="secondary"
-  onClick={loadWorkspaceFromGoogle}
-  disabled={googleBusy}
->
+    <button onClick={connectGoogle} disabled={googleBusy}>
+  {googleConnected ? 'Google Connected ✓' : 'Connect Google'}
+</button>
+<button onClick={createWorkspaceSheet} disabled={googleBusy}>
+  Create Workspace Sheet
+</button>
+<button className="secondary" onClick={chooseExistingWorkspaceSheet} disabled={googleBusy}>
+  Choose Existing Sheet
+</button>
+<button onClick={saveWorkspaceToGoogle} disabled={googleBusy}>
+  Save to Sheet
+</button>
+<button onClick={loadWorkspaceFromGoogle} disabled={googleBusy}>
   Load from Sheet
 </button>
   </div>
 
-  {workspaceSpreadsheetUrl && (
-    <p className="small" style={{ marginTop: '1rem' }}>
-      Workspace Sheet:{' '}
-      <a
-        href={workspaceSpreadsheetUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        Open Google Sheet
-      </a>
-    </p>
-  )}
+  {workspaceSpreadsheetUrl ? (
+  <p className="small">
+    Workspace Sheet:{' '}
+    <a href={workspaceSpreadsheetUrl} target="_blank" rel="noopener noreferrer">
+      Open Google Sheet
+    </a>
+  </p>
+) : (
+  <p className="small warning-text">
+    No workspace Sheet connected. Create a new Sheet or choose an existing one.
+  </p>
+)}
 </Panel>
 
         <Panel icon={<Upload />} title="Import TroopWebHost CSV">
