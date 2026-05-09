@@ -407,6 +407,14 @@ async function refreshCoordinatorProgressFromSheet({ quiet = false } = {}) {
   }
 }
 
+function handleCoordinatorAutoRefreshChange(checked) {
+  setCoordinatorAutoRefresh(checked)
+
+  if (checked) {
+    refreshCoordinatorProgressFromSheet({ quiet: true })
+  }
+}
+
 function completeStop(stopId, field) {
   toggleStopStatus(stopId, field)
 
@@ -1357,7 +1365,9 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
   <input
     type="checkbox"
     checked={coordinatorAutoRefresh}
-    onChange={(event) => setCoordinatorAutoRefresh(event.target.checked)}
+    onChange={(event) =>
+      handleCoordinatorAutoRefreshChange(event.target.checked)
+    }
   />
   Auto-refresh driver progress every 30 seconds
 </label>
