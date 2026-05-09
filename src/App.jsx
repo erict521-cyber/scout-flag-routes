@@ -1235,30 +1235,32 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
       )}
 
       {appView === 'driver' && (
-        <DriverRouteView
-          routes={routes}
-          selectedRoute={selectedRoute}
-          selectedRouteColor={selectedRouteColor}
-          driverMode={driverMode}
-          setDriverMode={setDriverMode}
-          activeStop={activeStop}
-          activeStopIndex={activeStopIndex}
-          setActiveStopIndex={setActiveStopIndex}
-          postedCountForRoute={postedCountForRoute}
-          pickedUpCountForRoute={pickedUpCountForRoute}
-          issueCountForRoute={issueCountForRoute}
-          updateStopComment={updateStopComment}
-          toggleStopStatus={toggleStopStatus}
-
-assignment={getSelectedRouteAssignment()}
-updateAssignment={updateSelectedRouteAssignment}
-assignedRoutes={assignedRoutes}
-startOrContinueRoute={startOrContinueRoute}
-autoAdvanceStops={autoAdvanceStops}
-setAutoAdvanceStops={setAutoAdvanceStops}
-completeStop={completeStop}
-        />
-      )}
+  <DriverRouteView
+    routes={routes}
+    activeRoutes={activeRoutes}
+    selectedRoute={selectedRoute}
+    selectedRouteColor={selectedRouteColor}
+    selectRoute={selectRoute}
+    setupStatus={setupStatus}
+    driverMode={driverMode}
+    setDriverMode={setDriverMode}
+    activeStop={activeStop}
+    activeStopIndex={activeStopIndex}
+    setActiveStopIndex={setActiveStopIndex}
+    postedCountForRoute={postedCountForRoute}
+    pickedUpCountForRoute={pickedUpCountForRoute}
+    issueCountForRoute={issueCountForRoute}
+    updateStopComment={updateStopComment}
+    toggleStopStatus={toggleStopStatus}
+    assignment={getSelectedRouteAssignment()}
+    updateAssignment={updateSelectedRouteAssignment}
+    assignedRoutes={assignedRoutes}
+    startOrContinueRoute={startOrContinueRoute}
+    autoAdvanceStops={autoAdvanceStops}
+    setAutoAdvanceStops={setAutoAdvanceStops}
+    completeStop={completeStop}
+  />
+)}
     </main>
   )
 }
@@ -1553,8 +1555,11 @@ function EditRouteOrderView({
 
 function DriverRouteView({
   routes,
+  activeRoutes,
   selectedRoute,
   selectedRouteColor,
+  selectRoute,
+  setupStatus,
   driverMode,
   setDriverMode,
   activeStop,
@@ -1565,14 +1570,18 @@ function DriverRouteView({
   issueCountForRoute,
   updateStopComment,
   toggleStopStatus,
-assignment,
-updateAssignment,
-assignedRoutes,
-startOrContinueRoute,
-autoAdvanceStops,
-setAutoAdvanceStops,
-completeStop,
+  assignment,
+  updateAssignment,
+  assignedRoutes,
+  startOrContinueRoute,
+  autoAdvanceStops,
+  setAutoAdvanceStops,
+  completeStop,
 }) {
+  const selectedAssignment = assignment || { driverName: '', navigatorName: '' }
+  const routeIsAssigned = Boolean(selectedAssignment.driverName?.trim())
+  const routeIsDeployed = Boolean(setupStatus?.routesDeployed)
+
   return (
     <section className="driver-view">
       {driverMode === 'overview' ? (
@@ -1580,6 +1589,60 @@ completeStop,
           <div>
             <p className="eyebrow">Driver Route Overview</p>
             <h2>{selectedRoute?.name || 'No route selected'}</h2>
+            <p className="small">
+              Drivers should use a navigator/passenger to operate the app while the vehicle is moving.
+            </p>
+          </div>
+
+          {!routeIsDeployed && (
+            <div className="driver-warning">
+              <strong>Routes have not been deployed yet.</strong>
+              <span>
+                This driver view is available for testing, but the coordinator should deploy routes before field use.
+              </span>
+            </div>
+          )}
+
+          <div className="driver-route-picker">
+            <div className="section-heading">
+              <h3>Choose Route</h3>
+              <span>{activeRoutes.length} active route{activeRoutes.length === 1 ? '' : 's'}</span>
+            </div>
+
+            <div className="driver-route-grid">
+              {activeRoutes.map((route, index) => {
+                const routeAssignment = assignedRoutes[route.id] || {}
+                const postedCount = route.stops.filter((stop) => stop.posted).length
+                const pickedUpCount = route.stops.filter((stop) => stop.pickedUp).length
+                const issueCount = route.stops.filter((stop) => stop.comment).length
+                const isSelected = route.id === selectedRoute?.id
+                const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length]
+
+                return (
+                  <button
+                    className={`driver-route-card ${isSelected ? 'selected' : ''}`}
+                    key={route.id}
+                    type="button"
+                    onClick={() => selectRoute(route.id)}
+                    style={{ borderLeftColor: routeColor }}
+                  >
+                    <strong>{route.name}</strong>
+                    <span>{route.stops.length} stops</span>
+                    <span>
+                      Driver:{' '}
+                      {routeAssignment.driverName?.trim() || 'Unassigned'}
+                    </span>
+                    {routeAssignment.navigatorName?.trim() && (
+                      <span>Navigator: {routeAssignment.navigatorName}</span>
+                    )}
+                    <span>
+                      Posted {postedCount}/{route.stops.length} · Pickup {pickedUpCount}/{route.stops.length}
+                    </span>
+                    {issueCount > 0 && <span>Issues: {issueCount}</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <div className="grid stats">
@@ -1588,50 +1651,51 @@ completeStop,
             <Stat label="Picked Up" value={pickedUpCountForRoute} icon={<Flag />} />
             <Stat label="Issues" value={issueCountForRoute} icon={<AlertTriangle />} />
           </div>
-<label
-  className="checkbox-row"
-  style={{ marginTop: '1rem' }}
->
-  <input
-    type="checkbox"
-    checked={autoAdvanceStops}
-    onChange={(event) => setAutoAdvanceStops(event.target.checked)}
-  />
-  Auto advance to next stop after completion
-</label>
-         <div className="form-grid" style={{ marginTop: '1rem' }}>
-  <TextField
-  label="Driver name"
-  value={assignment.driverName || ''}
-  onChange={(value) => updateAssignment('driverName', value)}
-/>
 
-<TextField
-  label="Navigator name"
-  value={assignment.navigatorName || ''}
-  onChange={(value) => updateAssignment('navigatorName', value)}
-/>
-</div>
+          <label className="checkbox-row" style={{ marginTop: '1rem' }}>
+            <input
+              type="checkbox"
+              checked={autoAdvanceStops}
+              onChange={(event) => setAutoAdvanceStops(event.target.checked)}
+            />
+            Auto advance to next stop after completion
+          </label>
 
-{assignment.driverName && (
-  <p className="small">
-    Assigned to: <strong>{assignment.driverName}</strong>
-{assignment.navigatorName ? ` / ${assignment.navigatorName}` : ''}
-  </p>
-)}
+          <div className="form-grid" style={{ marginTop: '1rem' }}>
+            <TextField
+              label="Driver name"
+              value={selectedAssignment.driverName || ''}
+              onChange={(value) => updateAssignment('driverName', value)}
+            />
+            <TextField
+              label="Navigator name"
+              value={selectedAssignment.navigatorName || ''}
+              onChange={(value) => updateAssignment('navigatorName', value)}
+            />
+          </div>
 
-<div className="actions" style={{ marginTop: '1rem' }}>
-  <button
-    onClick={() => startOrContinueRoute('posted')}
-    style={{ background: selectedRouteColor, color: 'white' }}
-  >
-    Start / Continue Posting
-  </button>
+          {routeIsAssigned ? (
+            <p className="small">
+              Assigned to: <strong>{selectedAssignment.driverName}</strong>
+              {selectedAssignment.navigatorName ? ` / ${selectedAssignment.navigatorName}` : ''}
+            </p>
+          ) : (
+            <p className="small warning-text">
+              This route does not have a driver assigned yet.
+            </p>
+          )}
 
-  <button className="secondary" onClick={() => startOrContinueRoute('pickedUp')}>
-    Start / Continue Pickup
-  </button>
-</div>
+          <div className="actions" style={{ marginTop: '1rem' }}>
+            <button
+              onClick={() => startOrContinueRoute('posted')}
+              style={{ background: selectedRouteColor, color: 'white' }}
+            >
+              Start / Continue Posting
+            </button>
+            <button className="secondary" onClick={() => startOrContinueRoute('pickedUp')}>
+              Start / Continue Pickup
+            </button>
+          </div>
 
           <div style={{ marginTop: '1.5rem' }}>
             <RouteMap routes={routes} />
@@ -1658,6 +1722,13 @@ completeStop,
             <p className="small">
               Stop {activeStopIndex + 1} of {selectedRoute?.stops.length}
             </p>
+
+            {routeIsAssigned && (
+              <p className="small">
+                Driver: <strong>{selectedAssignment.driverName}</strong>
+                {selectedAssignment.navigatorName ? ` / Navigator: ${selectedAssignment.navigatorName}` : ''}
+              </p>
+            )}
 
             <strong style={{ display: 'block', marginBottom: '0.75rem', fontSize: '1.1rem' }}>
               {activeStop.customerName}
@@ -1696,7 +1767,6 @@ completeStop,
               <label style={{ display: 'block', fontWeight: 700, marginBottom: '0.35rem' }}>
                 Comment / Issue
               </label>
-
               <textarea
                 placeholder="Add notes, access issues, damaged flag comments, etc..."
                 value={activeStop.comment || ''}
@@ -1711,7 +1781,6 @@ completeStop,
               >
                 {activeStop.posted ? 'Posted ✓' : 'Mark posted'}
               </button>
-
               <button
                 className={activeStop.pickedUp ? 'success' : 'secondary'}
                 onClick={() => completeStop(activeStop.id, 'pickedUp')}
@@ -1728,7 +1797,6 @@ completeStop,
               >
                 Previous stop
               </button>
-
               <button
                 disabled={activeStopIndex >= selectedRoute.stops.length - 1}
                 onClick={() =>
@@ -1739,7 +1807,6 @@ completeStop,
               >
                 Next stop
               </button>
-
               <button className="secondary" onClick={() => setDriverMode('overview')}>
                 Return to overview
               </button>
