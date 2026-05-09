@@ -1476,14 +1476,16 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
   return (
     <main className={printRoute ? 'app-shell print-active' : 'app-shell'}>
 {printRoute && (
-  <PrintRouteView
-    route={printRoute}
-    assignment={assignedRoutes[printRoute.id] || {}}
-    printMode={printMode}
-    setPrintMode={setPrintMode}
-    closePrintRoute={closePrintRoute}
-    printCurrentRoute={printCurrentRoute}
-  />
+  <div className="print-only-shell">
+    <PrintRouteView
+      route={printRoute}
+      assignment={assignedRoutes[printRoute.id] || {}}
+      printMode={printMode}
+      setPrintMode={setPrintMode}
+      closePrintRoute={closePrintRoute}
+      printCurrentRoute={printCurrentRoute}
+    />
+  </div>
 )}
 {!printRoute && !isDriverLinkMode && (
   <>
@@ -1497,7 +1499,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
           </p>
         </div>
         <div className="hero-card">
-          <Flag size={42} />
+          <Flag size={426} />
           <strong>PWA starter</strong>
           <span>GitHub Pages ready</span>
         </div>
@@ -1820,7 +1822,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
 </>
 )}
 
-      {!isDriverLinkMode && appView === 'coordinator' && (
+      {!printRoute && !isDriverLinkMode && appView === 'coordinator' && (
   <CoordinatorOverview
     routes={routes}
     selectedRoute={selectedRoute}
@@ -1832,7 +1834,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
   />
 )}
 
-{!isDriverLinkMode && appView === 'editRoute' && (
+{!printRoute && !isDriverLinkMode && appView === 'editRoute' && (
   <EditRouteOrderView
     routes={routes}
     selectedRoute={selectedRoute}
@@ -2231,35 +2233,48 @@ function PrintRouteView({
       </section>
 
       <section className="print-stop-list">
-        <h2>Stop List</h2>
+        <h2>Driver Stop Checklist</h2>
 
-        {route.stops.map((stop, index) => (
-          <article className="print-stop-card" key={stop.id}>
-            <div className="print-stop-number">{index + 1}</div>
-            <div>
-              <strong>{stop.customerName || 'Unnamed customer'}</strong>
-              <p>{stop.address}</p>
-
-              {stop.instructions && (
-                <p>
-                  <strong>Instructions:</strong> {stop.instructions}
-                </p>
-              )}
-
-              {stop.phone && (
-                <p>
-                  <strong>Phone:</strong> {stop.phone}
-                </p>
-              )}
-
-              {stop.comment && (
-                <p>
-                  <strong>Comment / Issue:</strong> {stop.comment}
-                </p>
-              )}
-            </div>
-          </article>
-        ))}
+        <table className="print-stop-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Customer / Address</th>
+              <th>Instructions / Phone</th>
+              <th>Posted</th>
+              <th>Pickup</th>
+              <th>Issue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {route.stops.map((stop, index) => (
+              <tr key={stop.id}>
+                <td className="print-stop-index">{index + 1}</td>
+                <td>
+                  <strong>{stop.customerName || 'Unnamed customer'}</strong>
+                  <br />
+                  {stop.address}
+                </td>
+                <td>
+                  {stop.instructions ? (
+                    <>
+                      <strong>Instructions:</strong> {stop.instructions}
+                      <br />
+                    </>
+                  ) : null}
+                  {stop.phone ? (
+                    <>
+                      <strong>Phone:</strong> {stop.phone}
+                    </>
+                  ) : null}
+                </td>
+                <td className="print-check-cell">□</td>
+                <td className="print-check-cell">□</td>
+                <td className="print-check-cell">□</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
     </section>
   )
