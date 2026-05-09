@@ -20,10 +20,12 @@ export function buildBalancedRoutes(stops, options = {}) {
     } else if (hasUsableManualRouteAssignments(routableStops)) {
       routes = buildRoutesFromManualAssignments(routableStops, routeCount)
     } else if (options.routingStyle === 'balanced') {
-      routes = buildBalancedGeographicBands(routableStops, routeCount)
-    } else {
-      routes = buildClusteredGeographicRoutes(routableStops, routeCount, options)
-    }
+  routes = buildBalancedGeographicBands(routableStops, routeCount)
+} else if (options.routingStyle === 'sectors') {
+  routes = buildGeographicSectorRoutes(routableStops, routeCount, options)
+} else {
+  routes = buildClusteredGeographicRoutes(routableStops, routeCount, options)
+}
 
     if (reviewStops.length > 0) {
       routes.push({
@@ -261,6 +263,111 @@ function getSmallestClusterIndex(clusters) {
   return clusters
     .map((cluster, index) => ({ index, size: cluster.length }))
     .sort((a, b) => a.size - b.size)[0].index
+}
+
+function buildGeographicSectorRoutes(stops, routeCount, options) {
+  const routes = buildEmptyRoutes(routeCount)
+
+  if (stops.length === 0) {
+    return buildFallbackRoutes(stops, routeCount)
+  }
+
+  if (stops.length < routeCount) {
+    return buildFallbackRoutes(stops, routeCount)
+  }
+
+  const center = getClusterCentroid(stops)
+  const sortedStops = [...stops].sort((a, b) => {
+    const angleA = getBearingRadians(center, a)
+    const angleB = getBearingRadians(center, b)
+
+    if (angleA !== angleB) return angleA - angleB
+
+    return distanceSquared(center, a) - distanceSquared(center, b)
+  })
+
+  const routeSizes = getRouteSizes(stops.length, routeCount, options)
+
+  let cursor = 0
+
+  routeSizes.forEach((size, routeIndex) => {
+    routes[routeIndex].stops = sortedStops.slice(cursor, cursor + size)
+    cursor += size
+  })
+
+  return routes.map((route) => ({
+    ...route,
+    stops: orderStopsSafely(route.stops, route.id),
+  }))
+}
+
+function getBearingRadians(center, stop) {
+  const latDiff = Number(stop.lat) - Number(center.lat)
+  const lngDiff = Number(stop.lng) - Number(center.lng)
+
+  const angle = Math.atan2(latDiff, lngDiff)
+
+  return angle < 0 ? angle + Math.PI * 2 : angle
+}
+
+function getRouteSizes(stopCount, routeCount, options) {
+  const ideal = stopCount / routeCount
+  const geographicWeight = clamp(Number(options?.geographicWeight ?? 75), 0, 100)
+  const configuredMin = Number(options?.minStopsPerRoute)
+  const configuredMax = Number(options?.maxStopsPerRoute)
+
+  const baseSizes = Array.from({ length: routeCount }, (_, index) => {
+    const start = Math.round(index * ideal)
+    const end = Math.round((index + 1) * ideal)
+
+    return Math.max(0, end - start)
+  })
+
+  const minStops =
+    Number.isFinite(configuredMin) && configuredMin > 0
+      ? configuredMin
+      : Math.floor(ideal)
+
+  const maxStops =
+    Number.isFinite(configuredMax) && configuredMax > 0
+      ? configuredMax
+      : Math.ceil(ideal)
+
+  if (geographicWeight >= 90) {
+    return normalizeRouteSizes(baseSizes, stopCount)
+  }
+
+  return normalizeRouteSizes(
+    baseSizes.map((size) => clamp(size, minStops, maxStops)),
+    stopCount,
+  )
+}
+
+function normalizeRouteSizes(sizes, stopCount) {
+  const normalized = [...sizes]
+  let total = normalized.reduce((sum, size) => sum + size, 0)
+
+  while (total < stopCount) {
+    const smallestIndex = normalized
+      .map((size, index) => ({ size, index }))
+      .sort((a, b) => a.size - b.size)[0].index
+
+    normalized[smallestIndex] += 1
+    total += 1
+  }
+
+  while (total > stopCount) {
+    const largestIndex = normalized
+      .map((size, index) => ({ size, index }))
+      .sort((a, b) => b.size - a.size)[0].index
+
+    if (normalized[largestIndex] <= 1) break
+
+    normalized[largestIndex] -= 1
+    total -= 1
+  }
+
+  return normalized
 }
 
 function buildBalancedGeographicBands(stops, routeCount) {
