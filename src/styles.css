@@ -569,3 +569,135 @@ textarea {
 .readonly-assignment-card span {
   color: #475569;
 }
+
+@media (max-width: 640px) {
+  .app-shell {
+    width: min(100%, calc(100% - 0.75rem));
+    padding: 0.5rem 0 1.5rem;
+  }
+
+  .driver-view {
+    padding: 0.85rem;
+    gap: 0.75rem;
+    border-radius: 1rem;
+  }
+
+  .driver-only-header {
+    padding-bottom: 0.55rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .driver-view h2 {
+    font-size: 1.55rem;
+    line-height: 1.05;
+  }
+
+  .driver-view .small {
+    font-size: 0.85rem;
+    line-height: 1.25;
+  }
+
+  .driver-view .grid.stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .driver-view .stat-card {
+    padding: 0.6rem;
+    min-height: 72px;
+    gap: 0.1rem 0.45rem;
+  }
+
+  .driver-view .stat-card svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .driver-view .stat-card span {
+    font-size: 0.76rem;
+  }
+
+  .driver-view .stat-card strong {
+    font-size: 1.25rem;
+  }
+
+  .readonly-assignment-card {
+    margin-top: 0.45rem;
+    padding: 0.7rem;
+    gap: 0.15rem;
+  }
+
+  .stop-card {
+    padding: 0.75rem;
+    gap: 0.55rem;
+    border-radius: 0.9rem;
+  }
+
+  .stop-card p {
+    margin: 0.1rem 0;
+    line-height: 1.25;
+  }
+
+  .stop-card strong {
+    line-height: 1.2;
+  }
+
+  .stop-card textarea {
+    min-height: 76px;
+    padding: 0.6rem;
+  }
+
+  .driver-view .actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+    margin-top: 0.6rem !important;
+  }
+
+  .driver-view .actions button,
+  .driver-view .actions .button-link {
+    width: 100%;
+    min-height: 46px;
+    justify-content: center;
+    padding: 0.65rem 0.75rem;
+    margin: 0;
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  .driver-view .actions button:last-child:nth-child(odd),
+  .driver-view .actions .button-link:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .driver-view .button-link.secondary {
+    min-height: 44px;
+  }
+
+  .sync-status {
+    padding: 0.22rem 0.55rem;
+    font-size: 0.78rem;
+    margin: 0.15rem 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .driver-view .grid.stats {
+    gap: 0.45rem;
+  }
+
+  .driver-view .stat-card {
+    padding: 0.5rem;
+  }
+
+  .driver-view .actions {
+    gap: 0.45rem;
+  }
+
+  .driver-view .actions button,
+  .driver-view .actions .button-link {
+    font-size: 0.9rem;
+    padding: 0.6rem 0.55rem;
+  }
+}
