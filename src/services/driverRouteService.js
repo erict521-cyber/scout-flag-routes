@@ -6,11 +6,18 @@ function hasDriverRouteEndpoint() {
 
 async function parseJsonResponse(response) {
   const text = await response.text()
+  const trimmedText = text.trim()
+
+  if (trimmedText.toLowerCase().startsWith('<!doctype') || trimmedText.toLowerCase().startsWith('<html')) {
+    throw new Error(
+      'Driver route endpoint returned an HTML page instead of JSON. Check VITE_APPS_SCRIPT_DRIVER_ROUTE_URL and confirm it points to the Apps Script /exec web app URL.',
+    )
+  }
 
   try {
-    return JSON.parse(text)
+    return JSON.parse(trimmedText)
   } catch {
-    throw new Error(text || 'Driver route endpoint returned a non-JSON response.')
+    throw new Error(trimmedText || 'Driver route endpoint returned a non-JSON response.')
   }
 }
 
