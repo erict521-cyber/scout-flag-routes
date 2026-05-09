@@ -278,39 +278,60 @@ function startOrContinueRoute(type = 'posted') {
 }
 
   function moveStopInSelectedRoute(stopId, direction) {
-    if (!selectedRoute) return
+  if (!selectedRoute) return
 
-    const currentRouteStops = [...selectedRoute.stops]
-    const currentIndex = currentRouteStops.findIndex((stop) => stop.id === stopId)
-    if (currentIndex === -1) return
-
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-    if (newIndex < 0 || newIndex >= currentRouteStops.length) return
-
-    const [movedStop] = currentRouteStops.splice(currentIndex, 1)
-    currentRouteStops.splice(newIndex, 0, movedStop)
-
-    const orderById = new Map(
-      currentRouteStops.map((stop, index) => [
-        stop.id,
-        {
-          manualRouteId: selectedRoute.id,
-          manualOrder: index,
-        },
-      ]),
+  if (
+    setupStatus.isSetupComplete &&
+    !confirm(
+      'Route setup is already marked complete. Editing route order will reopen setup and clear deployment status. Continue?',
     )
-
-    setStops((currentStops) =>
-      currentStops.map((stop) =>
-        orderById.has(stop.id)
-          ? {
-              ...stop,
-              ...orderById.get(stop.id),
-            }
-          : stop,
-      ),
-    )
+  ) {
+    return
   }
+
+  if (setupStatus.isSetupComplete) {
+    setSetupStatus((current) => ({
+      ...current,
+      isSetupComplete: false,
+      setupCompletedAt: '',
+      routesDeployed: false,
+      routesDeployedAt: '',
+    }))
+  }
+
+  const currentRouteStops = [...selectedRoute.stops]
+  const currentIndex = currentRouteStops.findIndex((stop) => stop.id === stopId)
+
+  if (currentIndex === -1) return
+
+  const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+
+  if (newIndex < 0 || newIndex >= currentRouteStops.length) return
+
+  const [movedStop] = currentRouteStops.splice(currentIndex, 1)
+  currentRouteStops.splice(newIndex, 0, movedStop)
+
+  const orderById = new Map(
+    currentRouteStops.map((stop, index) => [
+      stop.id,
+      {
+        manualRouteId: selectedRoute.id,
+        manualOrder: index,
+      },
+    ]),
+  )
+
+  setStops((currentStops) =>
+    currentStops.map((stop) =>
+      orderById.has(stop.id)
+        ? {
+            ...stop,
+            ...orderById.get(stop.id),
+          }
+        : stop,
+    ),
+  )
+}
 
 function hasValidCoordinates(stop) {
   if (stop.lat === null || stop.lat === undefined || stop.lat === '') return false
