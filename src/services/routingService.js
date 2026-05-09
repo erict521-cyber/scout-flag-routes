@@ -307,13 +307,17 @@ function buildRoutesFromManualAssignments(stops, routeCount) {
 }
 
 function hasUsableManualRouteAssignments(stops) {
-  const assignedRouteIds = new Set(
-    stops
-      .map((stop) => stop.manualRouteId)
-      .filter((routeId) => typeof routeId === 'string' && routeId.startsWith('route-')),
+  if (!Array.isArray(stops) || stops.length === 0) return false
+
+  const stopsWithManualRoute = stops.filter(
+    (stop) =>
+      typeof stop.manualRouteId === 'string' &&
+      stop.manualRouteId.startsWith('route-'),
   )
 
-  return assignedRouteIds.size > 1
+  if (stopsWithManualRoute.length === 0) return false
+
+  return stopsWithManualRoute.length === stops.length
 }
 
 function orderStopsSafely(stops, routeId) {
