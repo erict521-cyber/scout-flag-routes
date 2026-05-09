@@ -34,6 +34,10 @@ import {
 } from './services/googleSheetsService.js'
 
 import { pickGoogleSpreadsheet } from './services/googlePickerService.js'
+import {
+  loadDriverRouteByToken,
+  updateDriverStopProgressByToken,
+} from './services/driverRouteService.js'
 
 const ROUTE_OPTIONS_DEFAULT = {
   availableDrivers: 4,
@@ -125,6 +129,7 @@ const [driverLinkParams] = useState(() => getDriverLinkParamsFromUrl())
 const [driverLinkStatus, setDriverLinkStatus] = useState({
   state: 'idle',
   error: '',
+  source: '',
 })
 const driverCommentSyncTimers = useRef({})
 const coordinatorRefreshInFlight = useRef(false)
@@ -282,15 +287,6 @@ function advanceToNextStop() {
 async function syncDriverStopProgress(stop) {
   if (!stop?.id) return
 
-  if (!workspaceSpreadsheetId) {
-    setDriverSyncStatus({
-      state: 'error',
-      lastSavedAt: '',
-      error: 'No workspace Sheet connected.',
-    })
-    return
-  }
-
   try {
     setDriverSyncStatus((current) => ({
       ...current,
@@ -298,19 +294,35 @@ async function syncDriverStopProgress(stop) {
       error: '',
     }))
 
-    if (!googleConnected) {
-      await authorizeGoogleSheets()
-      setGoogleConnected(true)
-    }
+    if (driverLinkParams?.token) {
+      await updateDriverStopProgressByToken({
+        token: driverLinkParams.token,
+        stopId: stop.id,
+        posted: stop.posted,
+        pickedUp: stop.pickedUp,
+        comment: stop.comment || '',
+        postedAt: stop.postedAt || '',
+        pickedUpAt: stop.pickedUpAt || '',
+      })
+    } else {
+      if (!workspaceSpreadsheetId) {
+        throw new Error('No workspace Sheet connected.')
+      }
 
-    await updateRouteStopProgress(workspaceSpreadsheetId, {
-      stopId: stop.id,
-      posted: stop.posted,
-      pickedUp: stop.pickedUp,
-      comment: stop.comment || '',
-      postedAt: stop.postedAt || '',
-      pickedUpAt: stop.pickedUpAt || '',
-    })
+      if (!googleConnected) {
+        await authorizeGoogleSheets()
+        setGoogleConnected(true)
+      }
+
+      await updateRouteStopProgress(workspaceSpreadsheetId, {
+        stopId: stop.id,
+        posted: stop.posted,
+        pickedUp: stop.pickedUp,
+        comment: stop.comment || '',
+        postedAt: stop.postedAt || '',
+        pickedUpAt: stop.pickedUpAt || '',
+      })
+    }
 
     setDriverSyncStatus({
       state: 'saved',
@@ -854,7 +866,53 @@ async function loadWorkspaceFromDriverLink({ sheetId, routeId, token }) {
     setDriverLinkStatus({
       state: 'loading',
       error: '',
+      source: '',
     })
+
+    setAppView('driver')
+    setDriverMode('overview')
+
+    if (token) {
+      const loaded = await loadDriverRouteByToken(token)
+
+      const tokenRouteId = loaded.routeId
+      const tokenAssignment = loaded.assignment || {}
+
+      setWorkspaceSpreadsheetId(loaded.spreadsheetId || '')
+      setWorkspaceSpreadsheetUrl(
+        loaded.spreadsheetId
+          ? `https://docs.google.com/spreadsheets/d/${loaded.spreadsheetId}/edit`
+          : '',
+      )
+      setStops(loaded.stops || [])
+      setRouteOptions((current) => ({
+        ...current,
+        ...(loaded.routeOptions || {}),
+      }))
+      setAssignedRoutes({
+        [tokenRouteId]: tokenAssignment,
+      })
+      setSetupStatus(
+        loaded.setupStatus || {
+          isSetupComplete: true,
+          setupCompletedAt: '',
+          routesDeployed: true,
+          routesDeployedAt: '',
+        },
+      )
+
+      selectRoute(tokenRouteId)
+      setAppView('driver')
+      setDriverMode('overview')
+
+      setDriverLinkStatus({
+        state: 'loaded',
+        error: '',
+        source: 'driverEndpoint',
+      })
+
+      return
+    }
 
     setWorkspaceSpreadsheetId(sheetId)
     setWorkspaceSpreadsheetUrl(`https://docs.google.com/spreadsheets/d/${sheetId}/edit`)
@@ -876,15 +934,6 @@ async function loadWorkspaceFromDriverLink({ sheetId, routeId, token }) {
       throw new Error('No saved route data found in this workspace sheet.')
     }
 
-    const loadedAssignedRoutes = loaded.assignedRoutes || {}
-    const resolvedRouteId = token
-      ? findRouteIdByDriverToken(loadedAssignedRoutes, token)
-      : routeId
-
-    if (!resolvedRouteId) {
-      throw new Error('This driver route token was not found in the workspace sheet.')
-    }
-
     setStops(loaded.stops)
 
     if (loaded.routeOptions) {
@@ -902,31 +951,33 @@ async function loadWorkspaceFromDriverLink({ sheetId, routeId, token }) {
       setSetupStatus(loaded.setupStatus)
     }
 
-    selectRoute(resolvedRouteId)
+    selectRoute(routeId)
     setAppView('driver')
     setDriverMode('overview')
 
     setDriverLinkStatus({
       state: 'loaded',
       error: '',
+      source: 'googleSheets',
     })
   } catch (error) {
     console.error('Driver route link load failed:', error)
 
     setDriverLinkStatus({
-      state: 'error',
-      error:
-        error?.result?.error?.message ||
-        error?.message ||
-        'Failed to load driver route link.',
-    })
+  state: 'error',
+  source: '',
+  error:
+    error?.result?.error?.message ||
+    error?.message ||
+    'Failed to load driver route link.',
+})
 
     setAppView('driver')
   }
 }
 
 function getDriverRouteLink(routeId) {
-  if (!workspaceSpreadsheetId || !routeId) return ''
+  if (!routeId) return ''
 
   const url = new URL(window.location.href)
   const assignment = assignedRoutes[routeId] || {}
@@ -934,17 +985,18 @@ function getDriverRouteLink(routeId) {
   url.search = ''
   url.hash = ''
   url.searchParams.set('mode', 'driver')
-  url.searchParams.set('sheet', workspaceSpreadsheetId)
 
   if (assignment.driverToken) {
     url.searchParams.set('token', assignment.driverToken)
   } else {
+    if (!workspaceSpreadsheetId) return ''
+
+    url.searchParams.set('sheet', workspaceSpreadsheetId)
     url.searchParams.set('route', routeId)
   }
 
   return url.toString()
 }
-
 async function copyDriverRouteLink(routeId) {
   const url = getDriverRouteLink(routeId)
 
@@ -2566,7 +2618,7 @@ function getDriverLinkParamsFromUrl() {
     const routeId = params.get('route')
     const token = params.get('token')
 
-    if (!sheetId || (!routeId && !token)) return null
+    if (!token && (!sheetId || !routeId)) return null
 
     return {
       sheetId,
