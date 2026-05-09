@@ -855,3 +855,182 @@ textarea {
     font-size: 10pt;
   }
 }
+
+.print-only-shell {
+  background: #ffffff;
+}
+
+.print-route-view {
+  background: #ffffff;
+  color: #111827;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.print-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.print-route-header {
+  border-bottom: 2px solid #111827;
+  padding-bottom: 0.45rem;
+}
+
+.print-route-header h1 {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 2rem;
+}
+
+.print-route-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  font-weight: 800;
+}
+
+.print-map-section {
+  border: 1px solid #111827;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  break-after: page;
+}
+
+.print-route-view .route-map {
+  height: 6.6in;
+  min-height: 6.6in;
+}
+
+.print-stop-list h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+}
+
+.print-stop-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+}
+
+.print-stop-table th,
+.print-stop-table td {
+  border: 1px solid #111827;
+  padding: 0.22rem 0.3rem;
+  vertical-align: top;
+}
+
+.print-stop-table th {
+  background: #f1f5f9;
+  text-align: left;
+}
+
+.print-stop-index,
+.print-check-cell {
+  text-align: center;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.print-check-cell {
+  font-size: 16pt;
+  line-height: 1;
+}
+
+.print-bw,
+.print-bw * {
+  color: #111827 !important;
+  filter: grayscale(1);
+}
+
+.print-bw .numbered-route-pin span {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 2px solid #111827 !important;
+}
+
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0.35in;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-only-shell,
+  .print-only-shell * {
+    visibility: visible !important;
+  }
+
+  .print-only-shell {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  .app-shell {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .print-route-view {
+    padding: 0 !important;
+    gap: 0.35rem;
+  }
+
+  .print-route-header {
+    padding-bottom: 0.25rem;
+  }
+
+  .print-route-header h1 {
+    font-size: 22pt;
+  }
+
+  .print-route-meta {
+    font-size: 10pt;
+  }
+
+  .print-map-section {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .print-route-view .route-map {
+    height: 6.7in !important;
+    min-height: 6.7in !important;
+  }
+
+  .print-stop-table {
+    font-size: 8.5pt;
+  }
+
+  .print-stop-table th,
+  .print-stop-table td {
+    padding: 0.12rem 0.18rem;
+  }
+
+  .leaflet-control-container {
+    display: none !important;
+  }
+
+  .print-stop-table tr {
+    break-inside: avoid;
+  }
+}
