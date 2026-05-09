@@ -64,13 +64,13 @@ export default function RouteMap({ routes }) {
         bounds.push(latLng)
 
         L.marker(latLng, {
-          icon: L.divIcon({
-            className: 'numbered-route-pin',
-            html: `<span style="background:${color}">${stopIndex + 1}</span>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-          }),
-        })
+  icon: L.divIcon({
+    className: 'numbered-route-pin',
+    html: `<span style="background:${color}">${stopIndex + 1}</span>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  }),
+})
           .bindPopup(`
             <strong>${route.name}</strong><br/>
             Stop ${stopIndex + 1}<br/>
