@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowDown,
@@ -29,8 +29,10 @@ import {
   authorizeGoogleSheets,
   createScoutWorkspaceSheet,
   readWorkspaceData,
+  updateRouteStopProgress,
   writeWorkspaceData,
 } from './services/googleSheetsService.js'
+
 import { pickGoogleSpreadsheet } from './services/googlePickerService.js'
 
 const ROUTE_OPTIONS_DEFAULT = {
@@ -104,6 +106,12 @@ const [workspaceSpreadsheetUrl, setWorkspaceSpreadsheetUrl] = useState(
 
 const [googleBusy, setGoogleBusy] = useState(false)
 
+const [driverSyncStatus, setDriverSyncStatus] = useState({
+  state: 'idle',
+  lastSavedAt: '',
+  error: '',
+})
+const driverCommentSyncTimers = useRef({})
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
 const dashboard = useMemo(() => getDashboardStats(routes), [routes])
 const reviewRoute = routes.find((route) => route.isReviewRoute)
@@ -217,6 +225,71 @@ function advanceToNextStop() {
   setActiveStopIndex((current) =>
     Math.min(selectedRoute.stops.length - 1, current + 1),
   )
+}
+
+async function syncDriverStopProgress(stop) {
+  if (!stop?.id) return
+
+  if (!workspaceSpreadsheetId) {
+    setDriverSyncStatus({
+      state: 'error',
+      lastSavedAt: '',
+      error: 'No workspace Sheet connected.',
+    })
+    return
+  }
+
+  try {
+    setDriverSyncStatus((current) => ({
+      ...current,
+      state: 'saving',
+      error: '',
+    }))
+
+    if (!googleConnected) {
+      await authorizeGoogleSheets()
+      setGoogleConnected(true)
+    }
+
+    await updateRouteStopProgress(workspaceSpreadsheetId, {
+      stopId: stop.id,
+      posted: stop.posted,
+      pickedUp: stop.pickedUp,
+      comment: stop.comment || '',
+      postedAt: stop.postedAt || '',
+      pickedUpAt: stop.pickedUpAt || '',
+    })
+
+    setDriverSyncStatus({
+      state: 'saved',
+      lastSavedAt: new Date().toISOString(),
+      error: '',
+    })
+  } catch (error) {
+    console.error('Driver progress sync failed:', error)
+
+    setDriverSyncStatus({
+      state: 'error',
+      lastSavedAt: '',
+      error:
+        error?.result?.error?.message ||
+        error?.message ||
+        'Driver progress failed to sync.',
+    })
+  }
+}
+
+function queueDriverCommentSync(stop) {
+  if (!stop?.id) return
+
+  if (driverCommentSyncTimers.current[stop.id]) {
+    clearTimeout(driverCommentSyncTimers.current[stop.id])
+  }
+
+  driverCommentSyncTimers.current[stop.id] = setTimeout(() => {
+    syncDriverStopProgress(stop)
+    delete driverCommentSyncTimers.current[stop.id]
+  }, 1500)
 }
 
 function completeStop(stopId, field) {
@@ -939,26 +1012,48 @@ function clearLocalData() {
   }
 
   function toggleStopStatus(stopId, field) {
-    const timestampField = field === 'posted' ? 'postedAt' : 'pickedUpAt'
+  const timestampField = field === 'posted' ? 'postedAt' : 'pickedUpAt'
+  let updatedStop = null
 
-    setStops((currentStops) =>
-      currentStops.map((stop) =>
-        stop.id === stopId
-          ? {
-              ...stop,
-              [field]: !stop[field],
-              [timestampField]: !stop[field] ? new Date().toISOString() : '',
-            }
-          : stop,
-      ),
-    )
+  setStops((currentStops) =>
+    currentStops.map((stop) => {
+      if (stop.id !== stopId) return stop
+
+      updatedStop = {
+        ...stop,
+        [field]: !stop[field],
+        [timestampField]: !stop[field] ? new Date().toISOString() : '',
+      }
+
+      return updatedStop
+    }),
+  )
+
+  if (updatedStop) {
+    syncDriverStopProgress(updatedStop)
   }
+}
 
   function updateStopComment(stopId, comment) {
-    setStops((currentStops) =>
-      currentStops.map((stop) => (stop.id === stopId ? { ...stop, comment } : stop)),
-    )
+  let updatedStop = null
+
+  setStops((currentStops) =>
+    currentStops.map((stop) => {
+      if (stop.id !== stopId) return stop
+
+      updatedStop = {
+        ...stop,
+        comment,
+      }
+
+      return updatedStop
+    }),
+  )
+
+  if (updatedStop) {
+    queueDriverCommentSync(updatedStop)
   }
+}
 
 function acceptGeocodeSuggestion(stopId, suggestion) {
   setStops((currentStops) =>
@@ -1329,6 +1424,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
     autoAdvanceStops={autoAdvanceStops}
     setAutoAdvanceStops={setAutoAdvanceStops}
     completeStop={completeStop}
+driverSyncStatus={driverSyncStatus}
   />
 )}
     </main>
@@ -1623,6 +1719,32 @@ function EditRouteOrderView({
   )
 }
 
+function DriverSyncStatus({ status }) {
+  if (!status || status.state === 'idle') return null
+
+  if (status.state === 'saving') {
+    return <p className="sync-status saving">Saving progress...</p>
+  }
+
+  if (status.state === 'error') {
+    return (
+      <p className="sync-status error">
+        Save failed: {status.error || 'Unable to sync driver progress.'}
+      </p>
+    )
+  }
+
+  if (status.state === 'saved' && status.lastSavedAt) {
+    return (
+      <p className="sync-status saved">
+        Progress saved {new Date(status.lastSavedAt).toLocaleTimeString()}
+      </p>
+    )
+  }
+
+  return null
+}
+
 function DriverRouteView({
   routes,
   activeRoutes,
@@ -1647,6 +1769,7 @@ function DriverRouteView({
   autoAdvanceStops,
   setAutoAdvanceStops,
   completeStop,
+driverSyncStatus,
 }) {
   const selectedAssignment = assignment || { driverName: '', navigatorName: '' }
   const routeIsAssigned = Boolean(selectedAssignment.driverName?.trim())
@@ -1664,14 +1787,16 @@ function DriverRouteView({
             </p>
           </div>
 
-          {!routeIsDeployed && (
-            <div className="driver-warning">
-              <strong>Routes have not been deployed yet.</strong>
-              <span>
-                This driver view is available for testing, but the coordinator should deploy routes before field use.
-              </span>
-            </div>
-          )}
+         {!routeIsDeployed && (
+  <div className="driver-warning">
+    <strong>Routes have not been deployed yet.</strong>
+    <span>
+      This driver view is available for testing, but the coordinator should deploy routes before field use.
+    </span>
+  </div>
+)}
+
+<DriverSyncStatus status={driverSyncStatus} />
 
           <div className="driver-route-picker">
             <div className="section-heading">
@@ -1788,6 +1913,7 @@ function DriverRouteView({
             >
               {selectedRoute?.name}
             </div>
+<DriverSyncStatus status={driverSyncStatus} />
 
             <p className="small">
               Stop {activeStopIndex + 1} of {selectedRoute?.stops.length}
