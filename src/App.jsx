@@ -300,7 +300,7 @@ function completeStop(stopId, field) {
   if (field === 'posted' || field === 'pickedUp') {
     setTimeout(() => {
       advanceToNextStop()
-    }, 250)
+    }, 1200)
   }
 }
 
