@@ -1012,47 +1012,41 @@ function clearLocalData() {
   }
 
   function toggleStopStatus(stopId, field) {
+  const currentStop = stops.find((stop) => stop.id === stopId)
+
+  if (!currentStop) return
+
   const timestampField = field === 'posted' ? 'postedAt' : 'pickedUpAt'
-  let updatedStop = null
+  const nextValue = !currentStop[field]
+
+  const updatedStop = {
+    ...currentStop,
+    [field]: nextValue,
+    [timestampField]: nextValue ? new Date().toISOString() : '',
+  }
 
   setStops((currentStops) =>
-    currentStops.map((stop) => {
-      if (stop.id !== stopId) return stop
-
-      updatedStop = {
-        ...stop,
-        [field]: !stop[field],
-        [timestampField]: !stop[field] ? new Date().toISOString() : '',
-      }
-
-      return updatedStop
-    }),
+    currentStops.map((stop) => (stop.id === stopId ? updatedStop : stop)),
   )
 
-  if (updatedStop) {
-    syncDriverStopProgress(updatedStop)
-  }
+  syncDriverStopProgress(updatedStop)
 }
 
-  function updateStopComment(stopId, comment) {
-  let updatedStop = null
+function updateStopComment(stopId, comment) {
+  const currentStop = stops.find((stop) => stop.id === stopId)
+
+  if (!currentStop) return
+
+  const updatedStop = {
+    ...currentStop,
+    comment,
+  }
 
   setStops((currentStops) =>
-    currentStops.map((stop) => {
-      if (stop.id !== stopId) return stop
-
-      updatedStop = {
-        ...stop,
-        comment,
-      }
-
-      return updatedStop
-    }),
+    currentStops.map((stop) => (stop.id === stopId ? updatedStop : stop)),
   )
 
-  if (updatedStop) {
-    queueDriverCommentSync(updatedStop)
-  }
+  queueDriverCommentSync(updatedStop)
 }
 
 function acceptGeocodeSuggestion(stopId, suggestion) {
