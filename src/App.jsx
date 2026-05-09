@@ -121,8 +121,14 @@ const [coordinatorAutoRefresh, setCoordinatorAutoRefresh] = useState(() => {
 
   return saved ? JSON.parse(saved) : true
 })
+const [driverLinkParams] = useState(() => getDriverLinkParamsFromUrl())
+const [driverLinkStatus, setDriverLinkStatus] = useState({
+  state: 'idle',
+  error: '',
+})
 const driverCommentSyncTimers = useRef({})
 const coordinatorRefreshInFlight = useRef(false)
+const driverLinkLoadStarted = useRef(false)
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
 const dashboard = useMemo(() => getDashboardStats(routes), [routes])
 const reviewRoute = routes.find((route) => route.isReviewRoute)
@@ -202,6 +208,14 @@ useEffect(() => {
   workspaceSpreadsheetId,
   googleConnected,
 ])
+
+useEffect(() => {
+  if (!driverLinkParams) return
+  if (driverLinkLoadStarted.current) return
+
+  driverLinkLoadStarted.current = true
+  loadWorkspaceFromDriverLink(driverLinkParams)
+}, [driverLinkParams])
 
   useEffect(() => {
     localStorage.setItem('scoutFlagRoutes.stops', JSON.stringify(stops))
@@ -787,6 +801,99 @@ async function chooseExistingWorkspaceSheet() {
     )
   } finally {
     setGoogleBusy(false)
+  }
+}
+
+async function loadWorkspaceFromDriverLink({ sheetId, routeId }) {
+  try {
+    setDriverLinkStatus({
+      state: 'loading',
+      error: '',
+    })
+
+    setWorkspaceSpreadsheetId(sheetId)
+    setWorkspaceSpreadsheetUrl(`https://docs.google.com/spreadsheets/d/${sheetId}/edit`)
+    setAppView('driver')
+    setDriverMode('overview')
+    setSelectedRouteId(routeId)
+
+    if (!googleConnected) {
+      await authorizeGoogleSheets()
+      setGoogleConnected(true)
+    }
+
+    const loaded = await readWorkspaceData(sheetId)
+
+    if (!loaded.stops.length) {
+      throw new Error('No saved route data found in this workspace sheet.')
+    }
+
+    setStops(loaded.stops)
+
+    if (loaded.routeOptions) {
+      setRouteOptions((current) => ({
+        ...current,
+        ...loaded.routeOptions,
+      }))
+    }
+
+    if (loaded.assignedRoutes) {
+      setAssignedRoutes(loaded.assignedRoutes)
+    }
+
+    if (loaded.setupStatus) {
+      setSetupStatus(loaded.setupStatus)
+    }
+
+    selectRoute(routeId)
+    setAppView('driver')
+    setDriverMode('overview')
+
+    setDriverLinkStatus({
+      state: 'loaded',
+      error: '',
+    })
+  } catch (error) {
+    console.error('Driver route link load failed:', error)
+
+    setDriverLinkStatus({
+      state: 'error',
+      error:
+        error?.result?.error?.message ||
+        error?.message ||
+        'Failed to load driver route link.',
+    })
+
+    setAppView('driver')
+  }
+}
+
+function getDriverRouteLink(routeId) {
+  if (!workspaceSpreadsheetId || !routeId) return ''
+
+  const url = new URL(window.location.href)
+  url.search = ''
+  url.hash = ''
+  url.searchParams.set('mode', 'driver')
+  url.searchParams.set('sheet', workspaceSpreadsheetId)
+  url.searchParams.set('route', routeId)
+
+  return url.toString()
+}
+
+async function copyDriverRouteLink(routeId) {
+  const url = getDriverRouteLink(routeId)
+
+  if (!url) {
+    alert('Create or connect a workspace Sheet before copying driver links.')
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(url)
+    alert('Driver route link copied.')
+  } catch {
+    window.prompt('Copy this driver route link:', url)
   }
 }
 
@@ -1384,6 +1491,14 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
     ? 'Refreshing progress...'
     : 'Refresh Progress from Sheet'}
 </button>
+{setupStatus.routesDeployed && (
+  <DriverRouteLinks
+    activeRoutes={activeRoutes}
+    assignedRoutes={assignedRoutes}
+    getDriverRouteLink={getDriverRouteLink}
+    copyDriverRouteLink={copyDriverRouteLink}
+  />
+)}
   </div>
 
   <button onClick={startAddStop}>
@@ -1541,9 +1656,13 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
 
       {appView === 'driver' && (
   <DriverRouteView
-    routes={routes}
-    activeRoutes={activeRoutes}
-    selectedRoute={selectedRoute}
+  routes={routes}
+  activeRoutes={
+    driverLinkParams && selectedRoute
+      ? [selectedRoute]
+      : activeRoutes
+  }
+  selectedRoute={selectedRoute}
     selectedRouteColor={selectedRouteColor}
     selectRoute={selectRoute}
     setupStatus={setupStatus}
@@ -1565,6 +1684,8 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
     setAutoAdvanceStops={setAutoAdvanceStops}
     completeStop={completeStop}
 driverSyncStatus={driverSyncStatus}
+driverLinkParams={driverLinkParams}
+driverLinkStatus={driverLinkStatus}
   />
 )}
     </main>
@@ -1859,6 +1980,86 @@ function EditRouteOrderView({
   )
 }
 
+function DriverRouteLinks({
+  activeRoutes,
+  assignedRoutes,
+  getDriverRouteLink,
+  copyDriverRouteLink,
+}) {
+  if (!activeRoutes.length) return null
+
+  return (
+    <div className="driver-link-list">
+      <div className="section-heading">
+        <h3>Driver Route Links</h3>
+        <span>{activeRoutes.length} route{activeRoutes.length === 1 ? '' : 's'}</span>
+      </div>
+
+      {activeRoutes.map((route) => {
+        const assignment = assignedRoutes[route.id] || {}
+        const routeLink = getDriverRouteLink(route.id)
+
+        return (
+          <article className="driver-link-card" key={route.id}>
+            <div>
+              <strong>{route.name}</strong>
+              <p className="small">
+                Driver: {assignment.driverName?.trim() || 'Unassigned'}
+                {assignment.navigatorName?.trim()
+                  ? ` / Navigator: ${assignment.navigatorName}`
+                  : ''}
+              </p>
+              <p className="small">{route.stops.length} stops</p>
+            </div>
+
+            <div className="actions">
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => copyDriverRouteLink(route.id)}
+              >
+                Copy Link
+              </button>
+              {routeLink && (
+                <a
+                  className="button-link secondary"
+                  href={routeLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open
+                </a>
+              )}
+            </div>
+          </article>
+        )
+      })}
+    </div>
+  )
+}
+
+function DriverLinkStatus({ status }) {
+  if (!status || status.state === 'idle') return null
+
+  if (status.state === 'loading') {
+    return <p className="sync-status saving">Loading assigned route...</p>
+  }
+
+  if (status.state === 'error') {
+    return (
+      <p className="sync-status error">
+        Driver link failed: {status.error || 'Unable to load route link.'}
+      </p>
+    )
+  }
+
+  if (status.state === 'loaded') {
+    return <p className="sync-status saved">Assigned route loaded.</p>
+  }
+
+  return null
+}
+
 function CoordinatorSyncStatus({ status }) {
   if (!status || status.state === 'idle') {
     return <p className="small">Driver progress refresh is ready.</p>
@@ -1938,6 +2139,8 @@ function DriverRouteView({
   setAutoAdvanceStops,
   completeStop,
 driverSyncStatus,
+driverLinkParams,
+driverLinkStatus,
 }) {
   const selectedAssignment = assignment || { driverName: '', navigatorName: '' }
   const routeIsAssigned = Boolean(selectedAssignment.driverName?.trim())
@@ -1948,12 +2151,16 @@ driverSyncStatus,
       {driverMode === 'overview' ? (
         <>
           <div>
-            <p className="eyebrow">Driver Route Overview</p>
-            <h2>{selectedRoute?.name || 'No route selected'}</h2>
-            <p className="small">
-              Drivers should use a navigator/passenger to operate the app while the vehicle is moving.
-            </p>
-          </div>
+  <p className="eyebrow">
+    {driverLinkParams ? 'Driver Route Link' : 'Driver Route Overview'}
+  </p>
+  <h2>{selectedRoute?.name || 'No route selected'}</h2>
+  <p className="small">
+    Drivers should use a navigator/passenger to operate the app while the vehicle is moving.
+  </p>
+</div>
+
+{driverLinkParams && <DriverLinkStatus status={driverLinkStatus} />}
 
          {!routeIsDeployed && (
   <div className="driver-warning">
@@ -2225,6 +2432,26 @@ function TextField({ label, value, onChange }) {
       <input value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   )
+}
+
+function getDriverLinkParamsFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+
+    if (params.get('mode') !== 'driver') return null
+
+    const sheetId = params.get('sheet')
+    const routeId = params.get('route')
+
+    if (!sheetId || !routeId) return null
+
+    return {
+      sheetId,
+      routeId,
+    }
+  } catch {
+    return null
+  }
 }
 
 function IssueLog({ routes }) {
