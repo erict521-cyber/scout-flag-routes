@@ -221,22 +221,32 @@ export async function writeWorkspaceData(
 },
 
     {
-      range: 'route_stops!A1:F',
-      values: [
-        ['routeId', 'stopId', 'stopOrder', 'posted', 'pickedUp', 'comment'],
-
-        ...routes.flatMap((route) =>
-          route.stops.map((stop, index) => [
-            route.id,
-            stop.id,
-            index + 1,
-            stop.posted ? 'TRUE' : 'FALSE',
-            stop.pickedUp ? 'TRUE' : 'FALSE',
-            stop.comment || '',
-          ]),
-        ),
-      ],
-    },
+  range: 'route_stops!A1:H',
+  values: [
+    [
+      'routeId',
+      'stopId',
+      'stopOrder',
+      'posted',
+      'pickedUp',
+      'comment',
+      'postedAt',
+      'pickedUpAt',
+    ],
+    ...routes.flatMap((route) =>
+      route.stops.map((stop, index) => [
+        route.id,
+        stop.id,
+        index + 1,
+        stop.posted ? 'TRUE' : 'FALSE',
+        stop.pickedUp ? 'TRUE' : 'FALSE',
+        stop.comment || '',
+        stop.postedAt || '',
+        stop.pickedUpAt || '',
+      ]),
+    ),
+  ],
+},
   ]
 
   await window.gapi.client.sheets.spreadsheets.values.batchClear({
@@ -260,6 +270,60 @@ export async function writeWorkspaceData(
     data: valuesByRange,
   },
 })
+}
+
+export async function updateRouteStopProgress(
+  spreadsheetId,
+  { stopId, posted, pickedUp, comment, postedAt, pickedUpAt },
+) {
+  ensureReady()
+
+  if (!spreadsheetId) {
+    throw new Error('Missing workspace spreadsheet ID.')
+  }
+
+  if (!stopId) {
+    throw new Error('Missing stop ID for progress update.')
+  }
+
+  const response = await window.gapi.client.sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: 'route_stops!A:H',
+  })
+
+  const values = response.result.values || []
+  const [headers = [], ...rows] = values
+
+  const stopIdColumn = headers.indexOf('stopId')
+
+  if (stopIdColumn === -1) {
+    throw new Error('route_stops sheet is missing the stopId column.')
+  }
+
+  const rowIndex = rows.findIndex((row) => row[stopIdColumn] === stopId)
+
+  if (rowIndex === -1) {
+    throw new Error(`Stop ${stopId} was not found in route_stops. Deploy routes before syncing driver progress.`)
+  }
+
+  const sheetRowNumber = rowIndex + 2
+
+  return window.gapi.client.sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `route_stops!D${sheetRowNumber}:H${sheetRowNumber}`,
+    valueInputOption: 'RAW',
+    resource: {
+      values: [
+        [
+          posted ? 'TRUE' : 'FALSE',
+          pickedUp ? 'TRUE' : 'FALSE',
+          comment || '',
+          postedAt || '',
+          pickedUpAt || '',
+        ],
+      ],
+    },
+  })
 }
 
 export async function readWorkspaceData(spreadsheetId) {
@@ -288,13 +352,15 @@ export async function readWorkspaceData(spreadsheetId) {
     if (!routeData) return stop
 
     return {
-      ...stop,
-      manualRouteId: routeData.routeId,
-      manualOrder: routeData.stopOrder - 1,
-      posted: routeData.posted,
-      pickedUp: routeData.pickedUp,
-      comment: routeData.comment || stop.comment || '',
-    }
+  ...stop,
+  manualRouteId: routeData.routeId,
+  manualOrder: routeData.stopOrder - 1,
+  posted: routeData.posted,
+  pickedUp: routeData.pickedUp,
+  comment: routeData.comment || stop.comment || '',
+  postedAt: routeData.postedAt || stop.postedAt || '',
+  pickedUpAt: routeData.pickedUpAt || stop.pickedUpAt || '',
+}
   })
 
   return {
@@ -373,12 +439,14 @@ function parseRouteStops(values) {
     if (!record.stopId) return
 
     routeStopMap.set(record.stopId, {
-      routeId: record.routeId,
-      stopOrder: Number(record.stopOrder) || 0,
-      posted: parseBoolean(record.posted),
-      pickedUp: parseBoolean(record.pickedUp),
-      comment: record.comment || '',
-    })
+  routeId: record.routeId,
+  stopOrder: Number(record.stopOrder) || 0,
+  posted: parseBoolean(record.posted),
+  pickedUp: parseBoolean(record.pickedUp),
+  comment: record.comment || '',
+  postedAt: record.postedAt || '',
+  pickedUpAt: record.pickedUpAt || '',
+})
   })
 
   return routeStopMap
