@@ -115,6 +115,8 @@ const [driverSyncStatus, setDriverSyncStatus] = useState({
   lastSavedAt: '',
   error: '',
 })
+const [printRouteId, setPrintRouteId] = useState(null)
+const [printMode, setPrintMode] = useState('color')
 const [coordinatorSyncStatus, setCoordinatorSyncStatus] = useState({
   state: 'idle',
   lastRefreshedAt: '',
@@ -147,6 +149,7 @@ const assignedRouteCount = activeRoutes.filter((route) => {
 const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0]
 const activeStop = selectedRoute?.stops?.[activeStopIndex] || null
 const isDriverLinkMode = Boolean(driverLinkParams)
+const printRoute = activeRoutes.find((route) => route.id === printRouteId) || null
 
   const selectedRouteIndex = routes.findIndex((route) => route.id === selectedRoute?.id)
   const selectedRouteColor =
@@ -1013,6 +1016,26 @@ async function copyDriverRouteLink(routeId) {
   }
 }
 
+function openPrintRoute(routeId) {
+  setPrintRouteId(routeId)
+  setPrintMode('color')
+  setTimeout(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, 0)
+}
+
+function closePrintRoute() {
+  setPrintRouteId(null)
+}
+
+function printCurrentRoute(mode = printMode) {
+  setPrintMode(mode)
+
+  setTimeout(() => {
+    window.print()
+  }, 100)
+}
+
 async function saveWorkspaceToGoogle() {
   try {
     setGoogleBusy(true)
@@ -1451,8 +1474,18 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
 }
 
   return (
-    <main className="app-shell">
-{!isDriverLinkMode && (
+    <main className={printRoute ? 'app-shell print-active' : 'app-shell'}>
+{printRoute && (
+  <PrintRouteView
+    route={printRoute}
+    assignment={assignedRoutes[printRoute.id] || {}}
+    printMode={printMode}
+    setPrintMode={setPrintMode}
+    closePrintRoute={closePrintRoute}
+    printCurrentRoute={printCurrentRoute}
+  />
+)}
+{!printRoute && !isDriverLinkMode && (
   <>
       <header className="hero">
         <div>
@@ -1645,11 +1678,12 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
 </button>
 {setupStatus.routesDeployed && (
   <DriverRouteLinks
-    activeRoutes={activeRoutes}
-    assignedRoutes={assignedRoutes}
-    getDriverRouteLink={getDriverRouteLink}
-    copyDriverRouteLink={copyDriverRouteLink}
-  />
+  activeRoutes={activeRoutes}
+  assignedRoutes={assignedRoutes}
+  getDriverRouteLink={getDriverRouteLink}
+  copyDriverRouteLink={copyDriverRouteLink}
+  openPrintRoute={openPrintRoute}
+/>
 )}
   </div>
 
@@ -1808,7 +1842,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
   />
 )}
 
-      {appView === 'driver' && (
+      {!printRoute && appView === 'driver' && (
   <DriverRouteView
   routes={routes}
   activeRoutes={
@@ -2135,11 +2169,108 @@ function EditRouteOrderView({
   )
 }
 
+function PrintRouteView({
+  route,
+  assignment,
+  printMode,
+  setPrintMode,
+  closePrintRoute,
+  printCurrentRoute,
+}) {
+  const postedCount = route.stops.filter((stop) => stop.posted).length
+  const pickedUpCount = route.stops.filter((stop) => stop.pickedUp).length
+  const issueCount = route.stops.filter((stop) => stop.comment).length
+
+  return (
+    <section className={`print-route-view ${printMode === 'bw' ? 'print-bw' : 'print-color'}`}>
+      <div className="print-controls no-print">
+        <button className="secondary" type="button" onClick={closePrintRoute}>
+          Back
+        </button>
+
+        <label className="checkbox-row">
+          <input
+            type="radio"
+            name="printMode"
+            checked={printMode === 'color'}
+            onChange={() => setPrintMode('color')}
+          />
+          Color
+        </label>
+
+        <label className="checkbox-row">
+          <input
+            type="radio"
+            name="printMode"
+            checked={printMode === 'bw'}
+            onChange={() => setPrintMode('bw')}
+          />
+          Black & white
+        </label>
+
+        <button type="button" onClick={() => printCurrentRoute(printMode)}>
+          Print / Save PDF
+        </button>
+      </div>
+
+      <header className="print-route-header">
+        <p className="eyebrow">Scout Flag Route</p>
+        <h1>{route.name}</h1>
+        <div className="print-route-meta">
+          <span>Driver: {assignment.driverName || 'Unassigned'}</span>
+          <span>Navigator: {assignment.navigatorName || 'Not assigned'}</span>
+          <span>Total stops: {route.stops.length}</span>
+          <span>Posted: {postedCount}</span>
+          <span>Picked up: {pickedUpCount}</span>
+          <span>Issues: {issueCount}</span>
+        </div>
+      </header>
+
+      <section className="print-map-section">
+        <RouteMap routes={[route]} />
+      </section>
+
+      <section className="print-stop-list">
+        <h2>Stop List</h2>
+
+        {route.stops.map((stop, index) => (
+          <article className="print-stop-card" key={stop.id}>
+            <div className="print-stop-number">{index + 1}</div>
+            <div>
+              <strong>{stop.customerName || 'Unnamed customer'}</strong>
+              <p>{stop.address}</p>
+
+              {stop.instructions && (
+                <p>
+                  <strong>Instructions:</strong> {stop.instructions}
+                </p>
+              )}
+
+              {stop.phone && (
+                <p>
+                  <strong>Phone:</strong> {stop.phone}
+                </p>
+              )}
+
+              {stop.comment && (
+                <p>
+                  <strong>Comment / Issue:</strong> {stop.comment}
+                </p>
+              )}
+            </div>
+          </article>
+        ))}
+      </section>
+    </section>
+  )
+}
+
 function DriverRouteLinks({
   activeRoutes,
   assignedRoutes,
   getDriverRouteLink,
   copyDriverRouteLink,
+  openPrintRoute,
 }) {
   if (!activeRoutes.length) return null
 
@@ -2171,24 +2302,31 @@ function DriverRouteLinks({
             </div>
 
             <div className="actions">
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => copyDriverRouteLink(route.id)}
-              >
-                Copy Link
-              </button>
-              {routeLink && (
-                <a
-                  className="button-link secondary"
-                  href={routeLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open
-                </a>
-              )}
-            </div>
+  <button
+    className="secondary"
+    type="button"
+    onClick={() => copyDriverRouteLink(route.id)}
+  >
+    Copy Link
+  </button>
+  {routeLink && (
+    <a
+      className="button-link secondary"
+      href={routeLink}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Open
+    </a>
+  )}
+  <button
+    className="secondary"
+    type="button"
+    onClick={() => openPrintRoute(route.id)}
+  >
+    Print Route
+  </button>
+</div>
           </article>
         )
       })}
