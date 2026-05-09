@@ -524,3 +524,22 @@ textarea {
   background: #fef2f2;
   color: #b91c1c;
 }
+
+.driver-link-list {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.driver-link-card {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+  background: #ffffff;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.driver-link-card p {
+  margin: 0.25rem 0 0;
+}
