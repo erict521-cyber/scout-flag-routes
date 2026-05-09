@@ -2470,8 +2470,6 @@ isDriverLinkMode,
 
 {driverLinkParams && <DriverLinkStatus status={driverLinkStatus} />}
 
-{driverLinkParams && <DriverLinkStatus status={driverLinkStatus} />}
-
          {!routeIsDeployed && (
   <div className="driver-warning">
     <strong>Routes have not been deployed yet.</strong>
