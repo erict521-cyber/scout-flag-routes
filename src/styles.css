@@ -720,3 +720,138 @@ textarea {
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
   border: 2px solid #ffffff;
 }
+
+.print-route-view {
+  background: #ffffff;
+  border-radius: 1.25rem;
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.print-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.print-route-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.75rem;
+}
+
+.print-route-header h1 {
+  margin: 0.2rem 0 0.5rem;
+}
+
+.print-route-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1rem;
+  color: #475569;
+  font-weight: 700;
+}
+
+.print-map-section {
+  border: 1px solid #cbd5e1;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.print-route-view .route-map {
+  min-height: 420px;
+}
+
+.print-stop-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.print-stop-list h2 {
+  margin: 0;
+}
+
+.print-stop-card {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  gap: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.85rem;
+  padding: 0.75rem;
+  break-inside: avoid;
+}
+
+.print-stop-card p {
+  margin: 0.25rem 0 0;
+  color: #475569;
+}
+
+.print-stop-number {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+
+.print-bw,
+.print-bw * {
+  color: #111827 !important;
+}
+
+.print-bw .print-stop-number,
+.print-bw .numbered-route-pin span {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 2px solid #111827 !important;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  .app-shell {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .print-route-view {
+    border-radius: 0;
+    padding: 0;
+    gap: 0.5rem;
+  }
+
+  .print-route-header {
+    padding-bottom: 0.35rem;
+  }
+
+  .print-map-section {
+    page-break-after: always;
+    border: 1px solid #111827;
+  }
+
+  .print-route-view .route-map {
+    min-height: 7in;
+  }
+
+  .print-stop-card {
+    border-color: #111827;
+    padding: 0.45rem;
+  }
+
+  .print-stop-card p {
+    font-size: 10pt;
+  }
+}
