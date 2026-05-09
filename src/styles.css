@@ -500,3 +500,27 @@ textarea {
 .warning-text {
   color: #92400e;
 }
+
+.sync-status {
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-block;
+  margin: 0.5rem 0;
+}
+
+.sync-status.saving {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.sync-status.saved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.sync-status.error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
