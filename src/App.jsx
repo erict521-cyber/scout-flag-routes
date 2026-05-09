@@ -805,6 +805,37 @@ selectRoute('route-1')
     })
   }
 
+function clearLocalData() {
+  if (
+    !confirm(
+      'Clear all saved local app data and reload sample stops?\n\nThis clears local customers, route assignments, setup/deploy status, active stop position, and saved workspace links from this browser only. It does not delete anything from Google Sheets.',
+    )
+  ) {
+    return
+  }
+
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith('scoutFlagRoutes.'))
+    .forEach((key) => localStorage.removeItem(key))
+
+  setStops(sampleStops)
+  setRouteOptions(ROUTE_OPTIONS_DEFAULT)
+  setSelectedRouteId('route-1')
+  setAssignedRoutes({})
+  setSetupStatus({
+    isSetupComplete: false,
+    setupCompletedAt: '',
+    routesDeployed: false,
+    routesDeployedAt: '',
+  })
+  setWorkspaceSpreadsheetId('')
+  setWorkspaceSpreadsheetUrl('')
+  setActiveStopIndex(0)
+  setDriverMode('overview')
+  setAppView('coordinator')
+  setAutoAdvanceStops(true)
+}
+
   function cancelEdit() {
     setEditingStopId(null)
     setForm(EMPTY_FORM)
@@ -1077,17 +1108,9 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
             <Plus size={16} /> Add customer
           </button>
 
-          <button
-            className="danger"
-            onClick={() => {
-              if (!confirm('Clear all saved local data and reload sample stops?')) return
-              localStorage.removeItem('scoutFlagRoutes.stops')
-              setStops(sampleStops)
-              selectRoute('route-1')
-            }}
-          >
-            Clear local data
-          </button>
+          <button className="danger" onClick={clearLocalData}>
+  Clear local data
+</button>
 
           <button className="secondary" onClick={geocodeMissingAddresses} disabled={isGeocoding}>
             <Navigation size={16} />
