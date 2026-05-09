@@ -701,3 +701,22 @@ textarea {
     padding: 0.6rem 0.55rem;
   }
 }
+
+.numbered-route-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.numbered-route-pin span {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 24px;
+  text-align: center;
+  display: inline-block;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+  border: 2px solid #ffffff;
+}
