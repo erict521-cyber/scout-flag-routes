@@ -111,7 +111,18 @@ const [driverSyncStatus, setDriverSyncStatus] = useState({
   lastSavedAt: '',
   error: '',
 })
+const [coordinatorSyncStatus, setCoordinatorSyncStatus] = useState({
+  state: 'idle',
+  lastRefreshedAt: '',
+  error: '',
+})
+const [coordinatorAutoRefresh, setCoordinatorAutoRefresh] = useState(() => {
+  const saved = localStorage.getItem('scoutFlagRoutes.coordinatorAutoRefresh')
+
+  return saved ? JSON.parse(saved) : true
+})
 const driverCommentSyncTimers = useRef({})
+const coordinatorRefreshInFlight = useRef(false)
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
 const dashboard = useMemo(() => getDashboardStats(routes), [routes])
 const reviewRoute = routes.find((route) => route.isReviewRoute)
@@ -155,6 +166,13 @@ useEffect(() => {
 }, [autoAdvanceStops])
 
 useEffect(() => {
+  localStorage.setItem(
+    'scoutFlagRoutes.coordinatorAutoRefresh',
+    JSON.stringify(coordinatorAutoRefresh),
+  )
+}, [coordinatorAutoRefresh])
+
+useEffect(() => {
   localStorage.setItem('scoutFlagRoutes.setupStatus', JSON.stringify(setupStatus))
 }, [setupStatus])
 
@@ -165,6 +183,25 @@ useEffect(() => {
     String(activeStopIndex),
   )
 }, [activeStopIndex, selectedRoute?.id])
+
+useEffect(() => {
+  if (!coordinatorAutoRefresh) return
+  if (appView !== 'coordinator') return
+  if (!setupStatus.routesDeployed) return
+  if (!workspaceSpreadsheetId) return
+
+  const intervalId = setInterval(() => {
+    refreshCoordinatorProgressFromSheet({ quiet: true })
+  }, 30000)
+
+  return () => clearInterval(intervalId)
+}, [
+  coordinatorAutoRefresh,
+  appView,
+  setupStatus.routesDeployed,
+  workspaceSpreadsheetId,
+  googleConnected,
+])
 
   useEffect(() => {
     localStorage.setItem('scoutFlagRoutes.stops', JSON.stringify(stops))
@@ -290,6 +327,84 @@ function queueDriverCommentSync(stop) {
     syncDriverStopProgress(stop)
     delete driverCommentSyncTimers.current[stop.id]
   }, 1500)
+}
+
+async function refreshCoordinatorProgressFromSheet({ quiet = false } = {}) {
+  if (!workspaceSpreadsheetId) {
+    setCoordinatorSyncStatus({
+      state: 'error',
+      lastRefreshedAt: '',
+      error: 'No workspace Sheet connected.',
+    })
+
+    if (!quiet) {
+      alert('Create or connect a workspace sheet first.')
+    }
+
+    return
+  }
+
+  if (coordinatorRefreshInFlight.current) return
+
+  try {
+    coordinatorRefreshInFlight.current = true
+
+    setCoordinatorSyncStatus((current) => ({
+      ...current,
+      state: 'refreshing',
+      error: '',
+    }))
+
+    if (!googleConnected) {
+      await authorizeGoogleSheets()
+      setGoogleConnected(true)
+    }
+
+    const loaded = await readWorkspaceData(workspaceSpreadsheetId)
+    const loadedStopsById = new Map(loaded.stops.map((stop) => [stop.id, stop]))
+
+    setStops((currentStops) =>
+      currentStops.map((stop) => {
+        const loadedStop = loadedStopsById.get(stop.id)
+
+        if (!loadedStop) return stop
+
+        return {
+          ...stop,
+          posted: loadedStop.posted,
+          pickedUp: loadedStop.pickedUp,
+          comment: loadedStop.comment || '',
+          postedAt: loadedStop.postedAt || '',
+          pickedUpAt: loadedStop.pickedUpAt || '',
+        }
+      }),
+    )
+
+    setCoordinatorSyncStatus({
+      state: 'refreshed',
+      lastRefreshedAt: new Date().toISOString(),
+      error: '',
+    })
+  } catch (error) {
+    console.error('Coordinator progress refresh failed:', error)
+
+    const message =
+      error?.result?.error?.message ||
+      error?.message ||
+      'Coordinator progress refresh failed.'
+
+    setCoordinatorSyncStatus({
+      state: 'error',
+      lastRefreshedAt: '',
+      error: message,
+    })
+
+    if (!quiet) {
+      alert(`Failed to refresh route progress.\n\n${message}`)
+    }
+  } finally {
+    coordinatorRefreshInFlight.current = false
+  }
 }
 
 function completeStop(stopId, field) {
@@ -1238,6 +1353,27 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
     {reviewStopCount > 0 && (
       <span>Needs Review stops: {reviewStopCount}</span>
     )}
+<label className="checkbox-row">
+  <input
+    type="checkbox"
+    checked={coordinatorAutoRefresh}
+    onChange={(event) => setCoordinatorAutoRefresh(event.target.checked)}
+  />
+  Auto-refresh driver progress every 30 seconds
+</label>
+
+<CoordinatorSyncStatus status={coordinatorSyncStatus} />
+
+<button
+  className="secondary"
+  type="button"
+  onClick={() => refreshCoordinatorProgressFromSheet({ quiet: false })}
+  disabled={coordinatorSyncStatus.state === 'refreshing' || googleBusy}
+>
+  {coordinatorSyncStatus.state === 'refreshing'
+    ? 'Refreshing progress...'
+    : 'Refresh Progress from Sheet'}
+</button>
   </div>
 
   <button onClick={startAddStop}>
@@ -1711,6 +1847,34 @@ function EditRouteOrderView({
       </div>
     </section>
   )
+}
+
+function CoordinatorSyncStatus({ status }) {
+  if (!status || status.state === 'idle') {
+    return <p className="small">Driver progress refresh is ready.</p>
+  }
+
+  if (status.state === 'refreshing') {
+    return <p className="sync-status saving">Refreshing driver progress...</p>
+  }
+
+  if (status.state === 'error') {
+    return (
+      <p className="sync-status error">
+        Refresh failed: {status.error || 'Unable to refresh driver progress.'}
+      </p>
+    )
+  }
+
+  if (status.state === 'refreshed' && status.lastRefreshedAt) {
+    return (
+      <p className="sync-status saved">
+        Driver progress refreshed {new Date(status.lastRefreshedAt).toLocaleTimeString()}
+      </p>
+    )
+  }
+
+  return null
 }
 
 function DriverSyncStatus({ status }) {
