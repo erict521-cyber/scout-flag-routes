@@ -1209,13 +1209,28 @@ function clearLocalData() {
     setForm(EMPTY_FORM)
   }
 
-  function saveStop() {
-    if (!form.customerName.trim() || !form.address.trim()) {
-      alert('Customer name and address are required.')
-      return
-    }
+function confirmCoordinatorRouteProgressMutation(actionLabel) {
+  if (!setupStatus.routesDeployed || appView === 'driver') return true
 
-    if (editingStopId === 'new') {
+  return confirm(
+    `Routes have already been deployed to drivers.\n\n${actionLabel} may immediately change what drivers see or what stops appear complete. A driver could miss a stop if this is accidental.\n\nContinue?`,
+  )
+}
+
+  function saveStop() {
+  if (!form.customerName.trim() || !form.address.trim()) {
+    alert('Customer name and address are required.')
+    return
+  }
+
+  if (
+    editingStopId !== 'new' &&
+    !confirmCoordinatorRouteProgressMutation('Editing this stop')
+  ) {
+    return
+  }
+
+  if (editingStopId === 'new') {
       setStops((current) => [
         ...current,
         {
@@ -1240,14 +1255,32 @@ function clearLocalData() {
   }
 
   function deleteStop(stopId) {
-    if (!confirm('Delete this customer/stop?')) return
-    setStops((current) => current.filter((stop) => stop.id !== stopId))
+  if (
+    !confirmCoordinatorRouteProgressMutation('Deleting this stop')
+  ) {
+    return
   }
+
+  if (!confirm('Delete this customer/stop?')) return
+
+  setStops((current) => current.filter((stop) => stop.id !== stopId))
+}
 
   function toggleStopStatus(stopId, field) {
   const currentStop = stops.find((stop) => stop.id === stopId)
 
   if (!currentStop) return
+
+  if (
+    appView !== 'driver' &&
+    !confirmCoordinatorRouteProgressMutation(
+      field === 'posted'
+        ? 'Changing posted status for this stop'
+        : 'Changing pickup status for this stop',
+    )
+  ) {
+    return
+  }
 
   const timestampField = field === 'posted' ? 'postedAt' : 'pickedUpAt'
   const nextValue = !currentStop[field]
@@ -2047,7 +2080,7 @@ function DriverRouteLinks({
 }
 
 function DriverLinkStatus({ status }) {
-  if (!status || status.state === 'idle') return null
+  if (!status || status.state === 'idle' || status.state === 'loaded') return null
 
   if (status.state === 'loading') {
     return <p className="sync-status saving">Loading assigned route...</p>
@@ -2059,10 +2092,6 @@ function DriverLinkStatus({ status }) {
         Driver link failed: {status.error || 'Unable to load route link.'}
       </p>
     )
-  }
-
-  if (status.state === 'loaded') {
-    return <p className="sync-status saved">Assigned route loaded.</p>
   }
 
   return null
@@ -2248,14 +2277,14 @@ isDriverLinkMode,
 
           {isDriverLinkMode ? (
   <div className="readonly-assignment-card">
-    <span className="small">Assigned route team</span>
-    <strong>{selectedAssignment.driverName || 'Unassigned driver'}</strong>
-    {selectedAssignment.navigatorName ? (
-      <span>Navigator: {selectedAssignment.navigatorName}</span>
-    ) : (
-      <span className="small">No navigator assigned</span>
-    )}
-  </div>
+  <span className="small">Assigned route team</span>
+  <strong>Driver: {selectedAssignment.driverName || 'Unassigned driver'}</strong>
+  {selectedAssignment.navigatorName ? (
+    <span>Navigator: {selectedAssignment.navigatorName}</span>
+  ) : (
+    <span className="small">Navigator: Not assigned</span>
+  )}
+</div> 
 ) : (
   <>
     <div className="form-grid" style={{ marginTop: '1rem' }}>
