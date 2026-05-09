@@ -140,7 +140,8 @@ const assignedRouteCount = activeRoutes.filter((route) => {
   return assignment?.driverName?.trim()
 }).length
 const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0]
-  const activeStop = selectedRoute?.stops?.[activeStopIndex] || null
+const activeStop = selectedRoute?.stops?.[activeStopIndex] || null
+const isDriverLinkMode = Boolean(driverLinkParams)
 
   const selectedRouteIndex = routes.findIndex((route) => route.id === selectedRoute?.id)
   const selectedRouteColor =
@@ -469,20 +470,22 @@ function startOrContinueRoute(type = 'posted') {
 
   const assignment = getSelectedRouteAssignment()
 
-  if (!assignment.driverName.trim()) {
+  if (!driverLinkParams && !assignment.driverName.trim()) {
     alert('Enter a driver name before starting the route.')
     return
   }
 
-  setAssignedRoutes((current) => ({
-    ...current,
-    [selectedRoute.id]: {
-      ...current[selectedRoute.id],
-      driverName: assignment.driverName,
-      navigatorName: assignment.navigatorName || '',
-      assignedAt: current[selectedRoute.id]?.assignedAt || new Date().toISOString(),
-    },
-  }))
+  if (!driverLinkParams) {
+    setAssignedRoutes((current) => ({
+      ...current,
+      [selectedRoute.id]: {
+        ...current[selectedRoute.id],
+        driverName: assignment.driverName,
+        navigatorName: assignment.navigatorName || '',
+        assignedAt: current[selectedRoute.id]?.assignedAt || new Date().toISOString(),
+      },
+    }))
+  }
 
   setActiveStopIndex(getNextUnfinishedStopIndex(type))
   setDriverMode('active')
@@ -1303,6 +1306,8 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
 
   return (
     <main className="app-shell">
+{!isDriverLinkMode && (
+  <>
       <header className="hero">
         <div>
           <p className="eyebrow">Scout Flag Routes</p>
@@ -1631,28 +1636,30 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
           </div>
         </section>
       )}
+</>
+)}
 
-      {appView === 'coordinator' && (
-        <CoordinatorOverview
-          routes={routes}
-          selectedRoute={selectedRoute}
-          selectedRouteColor={selectedRouteColor}
-          startEditStop={startEditStop}
-          deleteStop={deleteStop}
-          toggleStopStatus={toggleStopStatus}
-          updateStopComment={updateStopComment}
-        />
-      )}
+      {!isDriverLinkMode && appView === 'coordinator' && (
+  <CoordinatorOverview
+    routes={routes}
+    selectedRoute={selectedRoute}
+    selectedRouteColor={selectedRouteColor}
+    startEditStop={startEditStop}
+    deleteStop={deleteStop}
+    toggleStopStatus={toggleStopStatus}
+    updateStopComment={updateStopComment}
+  />
+)}
 
-      {appView === 'editRoute' && (
-        <EditRouteOrderView
-          routes={routes}
-          selectedRoute={selectedRoute}
-          selectedRouteColor={selectedRouteColor}
-          moveStopInSelectedRoute={moveStopInSelectedRoute}
-          setAppView={setAppView}
-        />
-      )}
+{!isDriverLinkMode && appView === 'editRoute' && (
+  <EditRouteOrderView
+    routes={routes}
+    selectedRoute={selectedRoute}
+    selectedRouteColor={selectedRouteColor}
+    moveStopInSelectedRoute={moveStopInSelectedRoute}
+    setAppView={setAppView}
+  />
+)}
 
       {appView === 'driver' && (
   <DriverRouteView
@@ -1686,6 +1693,7 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
 driverSyncStatus={driverSyncStatus}
 driverLinkParams={driverLinkParams}
 driverLinkStatus={driverLinkStatus}
+isDriverLinkMode={isDriverLinkMode}
   />
 )}
     </main>
@@ -2141,6 +2149,7 @@ function DriverRouteView({
 driverSyncStatus,
 driverLinkParams,
 driverLinkStatus,
+isDriverLinkMode,
 }) {
   const selectedAssignment = assignment || { driverName: '', navigatorName: '' }
   const routeIsAssigned = Boolean(selectedAssignment.driverName?.trim())
@@ -2150,15 +2159,17 @@ driverLinkStatus,
     <section className="driver-view">
       {driverMode === 'overview' ? (
         <>
-          <div>
+          <<div className={isDriverLinkMode ? 'driver-only-header' : ''}>
   <p className="eyebrow">
-    {driverLinkParams ? 'Driver Route Link' : 'Driver Route Overview'}
+    {isDriverLinkMode ? 'Scout Flag Route' : 'Driver Route Overview'}
   </p>
   <h2>{selectedRoute?.name || 'No route selected'}</h2>
   <p className="small">
     Drivers should use a navigator/passenger to operate the app while the vehicle is moving.
   </p>
 </div>
+
+{driverLinkParams && <DriverLinkStatus status={driverLinkStatus} />}
 
 {driverLinkParams && <DriverLinkStatus status={driverLinkStatus} />}
 
@@ -2173,47 +2184,51 @@ driverLinkStatus,
 
 <DriverSyncStatus status={driverSyncStatus} />
 
-          <div className="driver-route-picker">
-            <div className="section-heading">
-              <h3>Choose Route</h3>
-              <span>{activeRoutes.length} active route{activeRoutes.length === 1 ? '' : 's'}</span>
-            </div>
+          {!isDriverLinkMode && (
+  <div className="driver-route-picker">
+    <div className="section-heading">
+      <h3>Choose Route</h3>
+      <span>
+        {activeRoutes.length} active route{activeRoutes.length === 1 ? '' : 's'}
+      </span>
+    </div>
 
-            <div className="driver-route-grid">
-              {activeRoutes.map((route, index) => {
-                const routeAssignment = assignedRoutes[route.id] || {}
-                const postedCount = route.stops.filter((stop) => stop.posted).length
-                const pickedUpCount = route.stops.filter((stop) => stop.pickedUp).length
-                const issueCount = route.stops.filter((stop) => stop.comment).length
-                const isSelected = route.id === selectedRoute?.id
-                const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length]
+    <div className="driver-route-grid">
+      {activeRoutes.map((route, index) => {
+        const routeAssignment = assignedRoutes[route.id] || {}
+        const postedCount = route.stops.filter((stop) => stop.posted).length
+        const pickedUpCount = route.stops.filter((stop) => stop.pickedUp).length
+        const issueCount = route.stops.filter((stop) => stop.comment).length
+        const isSelected = route.id === selectedRoute?.id
+        const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length]
 
-                return (
-                  <button
-                    className={`driver-route-card ${isSelected ? 'selected' : ''}`}
-                    key={route.id}
-                    type="button"
-                    onClick={() => selectRoute(route.id)}
-                    style={{ borderLeftColor: routeColor }}
-                  >
-                    <strong>{route.name}</strong>
-                    <span>{route.stops.length} stops</span>
-                    <span>
-                      Driver:{' '}
-                      {routeAssignment.driverName?.trim() || 'Unassigned'}
-                    </span>
-                    {routeAssignment.navigatorName?.trim() && (
-                      <span>Navigator: {routeAssignment.navigatorName}</span>
-                    )}
-                    <span>
-                      Posted {postedCount}/{route.stops.length} · Pickup {pickedUpCount}/{route.stops.length}
-                    </span>
-                    {issueCount > 0 && <span>Issues: {issueCount}</span>}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+        return (
+          <button
+            className={`driver-route-card ${isSelected ? 'selected' : ''}`}
+            key={route.id}
+            type="button"
+            onClick={() => selectRoute(route.id)}
+            style={{ borderLeftColor: routeColor }}
+          >
+            <strong>{route.name}</strong>
+            <span>{route.stops.length} stops</span>
+            <span>
+              Driver: {routeAssignment.driverName?.trim() || 'Unassigned'}
+            </span>
+            {routeAssignment.navigatorName?.trim() && (
+              <span>Navigator: {routeAssignment.navigatorName}</span>
+            )}
+            <span>
+              Posted {postedCount}/{route.stops.length} · Pickup {pickedUpCount}/
+              {route.stops.length}
+            </span>
+            {issueCount > 0 && <span>Issues: {issueCount}</span>}
+          </button>
+        )
+      })}
+    </div>
+  </div>
+)}
 
           <div className="grid stats">
             <Stat label="Total Stops" value={selectedRoute?.stops.length || 0} icon={<MapPinned />} />
@@ -2231,29 +2246,43 @@ driverLinkStatus,
             Auto advance to next stop after completion
           </label>
 
-          <div className="form-grid" style={{ marginTop: '1rem' }}>
-            <TextField
-              label="Driver name"
-              value={selectedAssignment.driverName || ''}
-              onChange={(value) => updateAssignment('driverName', value)}
-            />
-            <TextField
-              label="Navigator name"
-              value={selectedAssignment.navigatorName || ''}
-              onChange={(value) => updateAssignment('navigatorName', value)}
-            />
-          </div>
+          {isDriverLinkMode ? (
+  <div className="readonly-assignment-card">
+    <span className="small">Assigned route team</span>
+    <strong>{selectedAssignment.driverName || 'Unassigned driver'}</strong>
+    {selectedAssignment.navigatorName ? (
+      <span>Navigator: {selectedAssignment.navigatorName}</span>
+    ) : (
+      <span className="small">No navigator assigned</span>
+    )}
+  </div>
+) : (
+  <>
+    <div className="form-grid" style={{ marginTop: '1rem' }}>
+      <TextField
+        label="Driver name"
+        value={selectedAssignment.driverName || ''}
+        onChange={(value) => updateAssignment('driverName', value)}
+      />
+      <TextField
+        label="Navigator name"
+        value={selectedAssignment.navigatorName || ''}
+        onChange={(value) => updateAssignment('navigatorName', value)}
+      />
+    </div>
 
-          {routeIsAssigned ? (
-            <p className="small">
-              Assigned to: <strong>{selectedAssignment.driverName}</strong>
-              {selectedAssignment.navigatorName ? ` / ${selectedAssignment.navigatorName}` : ''}
-            </p>
-          ) : (
-            <p className="small warning-text">
-              This route does not have a driver assigned yet.
-            </p>
-          )}
+    {routeIsAssigned ? (
+      <p className="small">
+        Assigned to: <strong>{selectedAssignment.driverName}</strong>
+        {selectedAssignment.navigatorName ? ` / ${selectedAssignment.navigatorName}` : ''}
+      </p>
+    ) : (
+      <p className="small warning-text">
+        This route does not have a driver assigned yet.
+      </p>
+    )}
+  </>
+)}
 
           <div className="actions" style={{ marginTop: '1rem' }}>
             <button
