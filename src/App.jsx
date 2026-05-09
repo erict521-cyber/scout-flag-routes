@@ -44,7 +44,7 @@ const ROUTE_OPTIONS_DEFAULT = {
   maxRoutes: 6,
   minStopsPerRoute: 5,
   maxStopsPerRoute: 25,
-  routingStyle: 'geographic',
+  routingStyle: 'sectors',
   geographicWeight: 75,
 }
 
@@ -1574,8 +1574,9 @@ function acceptGeocodeSuggestion(stopId, suggestion) {
     value={routeOptions.routingStyle}
     onChange={(event) => updateRouteOption('routingStyle', event.target.value)}
   >
-    <option value="geographic">Geographic grouping</option>
-    <option value="balanced">Balanced workload</option>
+    <option value="sectors">Geographic sectors</option>
+<option value="geographic">Geographic clustering</option>
+<option value="balanced">Balanced workload</option>
 </select>
 </label>
 
