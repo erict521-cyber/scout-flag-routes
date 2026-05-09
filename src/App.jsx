@@ -630,6 +630,43 @@ function markSetupComplete() {
   alert('Route setup marked complete. You can now deploy routes.')
 }
 
+function createDriverRouteToken() {
+  if (window.crypto?.getRandomValues) {
+    const values = new Uint32Array(4)
+    window.crypto.getRandomValues(values)
+
+    return Array.from(values, (value) => value.toString(36))
+      .join('')
+      .slice(0, 28)
+  }
+
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 18)}`
+}
+
+function ensureDriverRouteTokens(routesToTokenize, currentAssignedRoutes) {
+  return routesToTokenize.reduce((nextAssignedRoutes, route) => {
+    const currentAssignment = nextAssignedRoutes[route.id] || {}
+
+    nextAssignedRoutes[route.id] = {
+      ...currentAssignment,
+      driverToken: currentAssignment.driverToken || createDriverRouteToken(),
+      tokenCreatedAt: currentAssignment.tokenCreatedAt || new Date().toISOString(),
+    }
+
+    return nextAssignedRoutes
+  }, { ...currentAssignedRoutes })
+}
+
+function findRouteIdByDriverToken(assignedRouteMap, token) {
+  if (!token) return ''
+
+  const match = Object.entries(assignedRouteMap || {}).find(
+    ([, assignment]) => assignment?.driverToken === token,
+  )
+
+  return match?.[0] || ''
+}
+
 async function deployRoutesToDrivers() {
   if (!setupStatus.isSetupComplete) {
     alert('Mark setup complete before deploying routes.')
@@ -664,11 +701,16 @@ async function deployRoutesToDrivers() {
   }
 
   const nextSetupStatus = {
-    ...setupStatus,
-    isSetupComplete: true,
-    routesDeployed: true,
-    routesDeployedAt: new Date().toISOString(),
-  }
+  ...setupStatus,
+  isSetupComplete: true,
+  routesDeployed: true,
+  routesDeployedAt: new Date().toISOString(),
+}
+
+const nextAssignedRoutes = ensureDriverRouteTokens(activeRoutes, assignedRoutes)
+
+setSetupStatus(nextSetupStatus)
+setAssignedRoutes(nextAssignedRoutes)
 
   setSetupStatus(nextSetupStatus)
 
@@ -686,12 +728,12 @@ async function deployRoutesToDrivers() {
     }
 
     await writeWorkspaceData(workspaceSpreadsheetId, {
-      stops,
-      routes,
-      routeOptions,
-      assignedRoutes,
-      setupStatus: nextSetupStatus,
-    })
+  stops,
+  routes,
+  routeOptions,
+  assignedRoutes: nextAssignedRoutes,
+  setupStatus: nextSetupStatus,
+})
 
     alert('Routes deployed and saved to Google Sheets.')
   } catch (error) {
@@ -807,7 +849,7 @@ async function chooseExistingWorkspaceSheet() {
   }
 }
 
-async function loadWorkspaceFromDriverLink({ sheetId, routeId }) {
+async function loadWorkspaceFromDriverLink({ sheetId, routeId, token }) {
   try {
     setDriverLinkStatus({
       state: 'loading',
@@ -818,7 +860,10 @@ async function loadWorkspaceFromDriverLink({ sheetId, routeId }) {
     setWorkspaceSpreadsheetUrl(`https://docs.google.com/spreadsheets/d/${sheetId}/edit`)
     setAppView('driver')
     setDriverMode('overview')
-    setSelectedRouteId(routeId)
+
+    if (routeId) {
+      setSelectedRouteId(routeId)
+    }
 
     if (!googleConnected) {
       await authorizeGoogleSheets()
@@ -829,6 +874,15 @@ async function loadWorkspaceFromDriverLink({ sheetId, routeId }) {
 
     if (!loaded.stops.length) {
       throw new Error('No saved route data found in this workspace sheet.')
+    }
+
+    const loadedAssignedRoutes = loaded.assignedRoutes || {}
+    const resolvedRouteId = token
+      ? findRouteIdByDriverToken(loadedAssignedRoutes, token)
+      : routeId
+
+    if (!resolvedRouteId) {
+      throw new Error('This driver route token was not found in the workspace sheet.')
     }
 
     setStops(loaded.stops)
@@ -848,7 +902,7 @@ async function loadWorkspaceFromDriverLink({ sheetId, routeId }) {
       setSetupStatus(loaded.setupStatus)
     }
 
-    selectRoute(routeId)
+    selectRoute(resolvedRouteId)
     setAppView('driver')
     setDriverMode('overview')
 
@@ -875,11 +929,18 @@ function getDriverRouteLink(routeId) {
   if (!workspaceSpreadsheetId || !routeId) return ''
 
   const url = new URL(window.location.href)
+  const assignment = assignedRoutes[routeId] || {}
+
   url.search = ''
   url.hash = ''
   url.searchParams.set('mode', 'driver')
   url.searchParams.set('sheet', workspaceSpreadsheetId)
-  url.searchParams.set('route', routeId)
+
+  if (assignment.driverToken) {
+    url.searchParams.set('token', assignment.driverToken)
+  } else {
+    url.searchParams.set('route', routeId)
+  }
 
   return url.toString()
 }
@@ -2051,6 +2112,9 @@ function DriverRouteLinks({
                   : ''}
               </p>
               <p className="small">{route.stops.length} stops</p>
+<p className="small">
+  Link type: {assignment.driverToken ? 'Tokenized' : 'Legacy route link'}
+</p>
             </div>
 
             <div className="actions">
@@ -2500,12 +2564,14 @@ function getDriverLinkParamsFromUrl() {
 
     const sheetId = params.get('sheet')
     const routeId = params.get('route')
+    const token = params.get('token')
 
-    if (!sheetId || !routeId) return null
+    if (!sheetId || (!routeId && !token)) return null
 
     return {
       sheetId,
       routeId,
+      token,
     }
   } catch {
     return null
