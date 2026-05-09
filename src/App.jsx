@@ -2159,7 +2159,7 @@ isDriverLinkMode,
     <section className="driver-view">
       {driverMode === 'overview' ? (
         <>
-          <<div className={isDriverLinkMode ? 'driver-only-header' : ''}>
+          <div className={isDriverLinkMode ? 'driver-only-header' : ''}>
   <p className="eyebrow">
     {isDriverLinkMode ? 'Scout Flag Route' : 'Driver Route Overview'}
   </p>
