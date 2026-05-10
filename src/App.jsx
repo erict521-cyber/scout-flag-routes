@@ -136,6 +136,7 @@ const [driverLinkStatus, setDriverLinkStatus] = useState({
 const driverCommentSyncTimers = useRef({})
 const coordinatorRefreshInFlight = useRef(false)
 const driverLinkLoadStarted = useRef(false)
+const printRouteIdRef = useRef(null)
   const routes = useMemo(() => buildBalancedRoutes(stops, routeOptions), [stops, routeOptions])
 const dashboard = useMemo(() => getDashboardStats(routes), [routes])
 const reviewRoute = routes.find((route) => route.isReviewRoute)
@@ -225,6 +226,22 @@ useEffect(() => {
   driverLinkLoadStarted.current = true
   loadWorkspaceFromDriverLink(driverLinkParams)
 }, [driverLinkParams])
+
+useEffect(() => {
+  printRouteIdRef.current = printRouteId
+}, [printRouteId])
+
+useEffect(() => {
+  function handlePrintRoutePopState() {
+    if (printRouteIdRef.current) {
+      setPrintRouteId(null)
+    }
+  }
+
+  window.addEventListener('popstate', handlePrintRoutePopState)
+
+  return () => window.removeEventListener('popstate', handlePrintRoutePopState)
+}, [])
 
   useEffect(() => {
     localStorage.setItem('scoutFlagRoutes.stops', JSON.stringify(stops))
@@ -1019,12 +1036,25 @@ async function copyDriverRouteLink(routeId) {
 function openPrintRoute(routeId) {
   setPrintRouteId(routeId)
   setPrintMode('color')
+
+  window.history.pushState(
+    { scoutFlagPrintRoute: routeId },
+    '',
+    `${window.location.pathname}${window.location.search}#print-${routeId}`,
+  )
+
   setTimeout(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.dispatchEvent(new Event('resize'))
   }, 0)
 }
 
 function closePrintRoute() {
+  if (window.history.state?.scoutFlagPrintRoute) {
+    window.history.back()
+    return
+  }
+
   setPrintRouteId(null)
 }
 
@@ -1032,8 +1062,12 @@ function printCurrentRoute(mode = printMode) {
   setPrintMode(mode)
 
   setTimeout(() => {
+    window.dispatchEvent(new Event('resize'))
+  }, 50)
+
+  setTimeout(() => {
     window.print()
-  }, 100)
+  }, 350)
 }
 
 async function saveWorkspaceToGoogle() {
@@ -2229,8 +2263,13 @@ function PrintRouteView({
       </header>
 
       <section className="print-map-section">
-        <RouteMap routes={[route]} />
-      </section>
+  <RouteMap
+    routes={[route]}
+    fitPadding={[8, 8]}
+    maxFitZoom={17}
+    className="route-map print-route-map"
+  />
+</section>
 
       <section className="print-stop-list">
         <h2>Driver Stop Checklist</h2>
