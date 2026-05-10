@@ -1063,3 +1063,55 @@ textarea {
     height: 48px;
   }
 }
+
+.print-only-shell {
+  background: #ffffff;
+}
+
+.print-route-map {
+  height: 6.7in;
+  min-height: 6.7in;
+  margin-top: 0;
+}
+
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0.35in;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-only-shell,
+  .print-only-shell * {
+    visibility: visible !important;
+  }
+
+  .print-only-shell {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  .leaflet-control-container {
+    display: none !important;
+  }
+
+  .print-route-map {
+    height: 6.6in !important;
+    min-height: 6.6in !important;
+    margin: 0 !important;
+  }
+}
