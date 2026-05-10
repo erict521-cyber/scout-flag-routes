@@ -5,7 +5,12 @@ import 'leaflet/dist/leaflet.css'
 const ROUTE_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#0891b2']
 const MAX_MAP_RADIUS_MILES = 80
 
-export default function RouteMap({ routes }) {
+export default function RouteMap({
+  routes,
+  fitPadding = [30, 30],
+  maxFitZoom = 18,
+  className = 'route-map',
+}) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const layerRef = useRef(null)
@@ -23,7 +28,8 @@ export default function RouteMap({ routes }) {
     mapInstanceRef.current = map
     layerRef.current = L.layerGroup().addTo(map)
 
-    setTimeout(() => map.invalidateSize(), 500)
+    setTimeout(() => map.invalidateSize({ pan: false }), 0)
+    setTimeout(() => map.invalidateSize({ pan: false }), 300)
   }, [])
 
   useEffect(() => {
@@ -39,7 +45,6 @@ export default function RouteMap({ routes }) {
 
     routes.forEach((route, routeIndex) => {
       const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length]
-
       const routePoints = route.stops
         .map((stop) => ({
           stop,
@@ -64,49 +69,44 @@ export default function RouteMap({ routes }) {
         bounds.push(latLng)
 
         L.marker(latLng, {
-  icon: L.divIcon({
-    className: 'numbered-route-pin',
-    html: `<span style="background:${color}">${stopIndex + 1}</span>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-  }),
-})
+          icon: L.divIcon({
+            className: 'numbered-route-pin',
+            html: `<span style="background:${color}">${stopIndex + 1}</span>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+          }),
+        })
           .bindPopup(`
-            <strong>${route.name}</strong><br/>
-            Stop ${stopIndex + 1}<br/>
-            ${escapeHtml(point.stop.customerName)}<br/>
+            ${route.name}<br />
+            Stop ${stopIndex + 1}<br />
+            ${escapeHtml(point.stop.customerName)}<br />
             ${escapeHtml(point.stop.address)}
           `)
           .addTo(layer)
       })
     })
 
-    if (bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [30, 30] })
+    function refitMap() {
+      map.invalidateSize({ pan: false })
+
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, {
+          padding: fitPadding,
+          maxZoom: maxFitZoom,
+        })
+      }
     }
 
-    setTimeout(() => map.invalidateSize(), 500)
-  }, [routes])
+    refitMap()
+    setTimeout(refitMap, 150)
+    setTimeout(refitMap, 500)
+  }, [routes, fitPadding, maxFitZoom])
 
-  return (
-    <div
-      ref={mapRef}
-      style={{
-        width: '100%',
-        height: '420px',
-        borderRadius: '1rem',
-        overflow: 'hidden',
-        border: '1px solid #e2e8f0',
-        marginTop: '1rem',
-      }}
-    />
-  )
+  return <div className={className} ref={mapRef} />
 }
 
 function getTrustedStopIds(routes) {
-  const points = routes
-    .flatMap((route) => route.stops)
-    .filter(hasValidCoordinateValue)
+  const points = routes.flatMap((route) => route.stops).filter(hasValidCoordinateValue)
 
   if (points.length <= 2) return new Set(points.map((stop) => stop.id))
 
