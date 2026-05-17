@@ -15,7 +15,7 @@ export default function RouteMap({
   const mapInstanceRef = useRef(null)
   const layerRef = useRef(null)
 
-  useEffect(() => {
+   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return
 
     const map = L.map(mapRef.current).setView([29.5, -95.1], 11)
@@ -28,8 +28,32 @@ export default function RouteMap({
     mapInstanceRef.current = map
     layerRef.current = L.layerGroup().addTo(map)
 
-    setTimeout(() => map.invalidateSize({ pan: false }), 0)
-    setTimeout(() => map.invalidateSize({ pan: false }), 300)
+    function invalidateMapSize() {
+      map.invalidateSize({ pan: false })
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      invalidateMapSize()
+      setTimeout(invalidateMapSize, 100)
+    })
+
+    resizeObserver.observe(mapRef.current)
+
+    window.addEventListener('resize', invalidateMapSize)
+    window.addEventListener('orientationchange', invalidateMapSize)
+
+    setTimeout(invalidateMapSize, 0)
+    setTimeout(invalidateMapSize, 300)
+    setTimeout(invalidateMapSize, 750)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', invalidateMapSize)
+      window.removeEventListener('orientationchange', invalidateMapSize)
+      map.remove()
+      mapInstanceRef.current = null
+      layerRef.current = null
+    }
   }, [])
 
   useEffect(() => {
@@ -107,7 +131,9 @@ export default function RouteMap({
 }
 
 function getTrustedStopIds(routes) {
-  const points = routes.flatMap((route) => route.stops || []).filter(hasValidCoordinateValue)
+  const points = (Array.isArray(routes) ? routes : [])
+    .flatMap((route) => route.stops || [])
+    .filter(hasValidCoordinateValue)
 
   if (points.length <= 2) return new Set(points.map((stop) => stop.id))
 
