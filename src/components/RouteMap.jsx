@@ -15,10 +15,13 @@ export default function RouteMap({
   const mapInstanceRef = useRef(null)
   const layerRef = useRef(null)
 
-   useEffect(() => {
+  useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return
 
-    const map = L.map(mapRef.current).setView([29.5, -95.1], 11)
+    const map = L.map(mapRef.current, {
+      zoomControl: true,
+      attributionControl: true,
+    }).setView([29.5, -95.1], 11)
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
@@ -28,32 +31,9 @@ export default function RouteMap({
     mapInstanceRef.current = map
     layerRef.current = L.layerGroup().addTo(map)
 
-    function invalidateMapSize() {
-      map.invalidateSize({ pan: false })
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      invalidateMapSize()
-      setTimeout(invalidateMapSize, 100)
-    })
-
-    resizeObserver.observe(mapRef.current)
-
-    window.addEventListener('resize', invalidateMapSize)
-    window.addEventListener('orientationchange', invalidateMapSize)
-
-    setTimeout(invalidateMapSize, 0)
-    setTimeout(invalidateMapSize, 300)
-    setTimeout(invalidateMapSize, 750)
-
-    return () => {
-      resizeObserver.disconnect()
-      window.removeEventListener('resize', invalidateMapSize)
-      window.removeEventListener('orientationchange', invalidateMapSize)
-      map.remove()
-      mapInstanceRef.current = null
-      layerRef.current = null
-    }
+    setTimeout(() => map.invalidateSize({ pan: false }), 0)
+    setTimeout(() => map.invalidateSize({ pan: false }), 250)
+    setTimeout(() => map.invalidateSize({ pan: false }), 750)
   }, [])
 
   useEffect(() => {
@@ -65,7 +45,7 @@ export default function RouteMap({
     layer.clearLayers()
 
     const safeRoutes = Array.isArray(routes) ? routes : []
-    const allTrustedIds = getTrustedStopIds(safeRoutes)
+    const trustedStopIds = getTrustedStopIds(safeRoutes)
     const bounds = []
 
     safeRoutes.forEach((route, routeIndex) => {
@@ -76,7 +56,7 @@ export default function RouteMap({
           lat: Number(stop.lat),
           lng: Number(stop.lng),
         }))
-        .filter((point) => allTrustedIds.has(point.stop.id))
+        .filter((point) => trustedStopIds.has(point.stop.id))
 
       if (routePoints.length > 1) {
         L.polyline(
@@ -122,9 +102,9 @@ export default function RouteMap({
       }
     }
 
-    refitMap()
-    setTimeout(refitMap, 150)
-    setTimeout(refitMap, 500)
+    setTimeout(refitMap, 0)
+    setTimeout(refitMap, 200)
+    setTimeout(refitMap, 700)
   }, [routes, fitPadding, maxFitZoom])
 
   return <div className={className} ref={mapRef} />
