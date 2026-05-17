@@ -1115,3 +1115,9 @@ textarea {
     margin: 0 !important;
   }
 }
+
+.route-map.leaflet-container,
+.route-map .leaflet-container {
+  width: 100%;
+  height: 100%;
+}
