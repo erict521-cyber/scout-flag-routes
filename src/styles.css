@@ -1121,3 +1121,12 @@ textarea {
   width: 100%;
   height: 100%;
 }
+
+.route-map.leaflet-container {
+  width: 100%;
+  height: 420px;
+}
+
+.print-route-map.leaflet-container {
+  height: 6.7in;
+}
