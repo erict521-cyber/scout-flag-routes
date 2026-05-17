@@ -40,12 +40,13 @@ export default function RouteMap({
 
     layer.clearLayers()
 
-    const allTrustedIds = getTrustedStopIds(routes)
+    const safeRoutes = Array.isArray(routes) ? routes : []
+    const allTrustedIds = getTrustedStopIds(safeRoutes)
     const bounds = []
 
-    routes.forEach((route, routeIndex) => {
+    safeRoutes.forEach((route, routeIndex) => {
       const color = ROUTE_COLORS[routeIndex % ROUTE_COLORS.length]
-      const routePoints = route.stops
+      const routePoints = (route.stops || [])
         .map((stop) => ({
           stop,
           lat: Number(stop.lat),
@@ -77,7 +78,7 @@ export default function RouteMap({
           }),
         })
           .bindPopup(`
-            ${route.name}<br />
+            ${escapeHtml(route.name)}<br />
             Stop ${stopIndex + 1}<br />
             ${escapeHtml(point.stop.customerName)}<br />
             ${escapeHtml(point.stop.address)}
@@ -106,7 +107,7 @@ export default function RouteMap({
 }
 
 function getTrustedStopIds(routes) {
-  const points = routes.flatMap((route) => route.stops).filter(hasValidCoordinateValue)
+  const points = routes.flatMap((route) => route.stops || []).filter(hasValidCoordinateValue)
 
   if (points.length <= 2) return new Set(points.map((stop) => stop.id))
 
